@@ -14,6 +14,25 @@ talk-back wall is.
 
 ## 1. Microphone → RTSP — done ✅
 
+> ### ⚠️ Quality ceiling: it's the vendor's 8 kHz "talkback" channel, and it sounds like it
+> The mic audio we capture is **`IMP AI dev1/ch0` — the vendor's two-way / talkback path**, not the
+> high-fidelity channel the phone app plays. Quantitative DSP analysis of the captured stream (clean
+> synth reference for comparison) found:
+> - **Muffled = a hard telephone brick-wall at ~3.4 kHz** — 99% of energy rolls off by ~3.2 kHz;
+>   the entire 4–8 kHz consonant/sibilance band is physically absent (8 kHz sampling). ~−30 dB there.
+> - **"Robotic/watery" = the channel's echo-cancel / noise-suppression DSP** — **+4 dB of
+>   "musical-noise" floor flicker** vs a clean reference, **~44 dB of gating/ducking**, and a broad
+>   1.5–2.25 kHz notch. This is aggressive AEC/NS meant for phone-style talk, not fidelity.
+> - **Not** a bug, **not** a rate/pitch error (voiced f0 measured 167–258 Hz, normal), **not** µ-law
+>   (~36 dB SNR at these levels), and **not** the player (the degradation is already in the raw RTP
+>   stream; VLC only adds gain). The camera hardware is fine — the **app sounds good because it uses a
+>   different, cleaner ~16 kHz channel** without this DSP.
+>
+> **To get app-quality audio (future work):** capture the app's **16 kHz main audio channel** instead
+> of dev1 (best — fixes bandwidth *and* the DSP at once), or reconfigure this path to 16 kHz + disable
+> `IMP_AI` AEC/NS/AGC and carry it as L16/Opus instead of G.711. If constrained to 8 kHz G.711, just
+> disabling NS/AEC removes most of the "robotic" character while staying phone-bandwidth.
+
 ### The dead end we started at (`:81` audio CGI)
 The first idea was to pull audio the same way video is pulled — from the app's local
 `livestream.cgi`/`audiostream.cgi` on `127.0.0.1:81`. **That is architecturally impossible
