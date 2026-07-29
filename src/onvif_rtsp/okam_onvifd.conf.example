@@ -1,0 +1,56 @@
+# okam_onvifd config -- install at /system/etc/okam_onvifd.conf on the camera.
+# key=value, '#' comments, blank lines ignored. Every key has a built-in
+# default (see src/config.c); only devpw/vuid actually need to be set for a
+# working install. devpw/vuid can also be supplied via env OKAM_DEVPW /
+# OKAM_VUID, or --devpw/--vuid on the command line (highest priority).
+
+# --- required for the camera-side handshake (livestream.cgi) ---
+# Device admin password (the random per-unit value in NVS -- read once from
+# a live vp_project via /proc/<pid>/mem, see okam-rtsp-proxy project memory).
+devpw=CHANGE_ME
+# Device id (vuid) -- the per-unit ID string, e.g. VQxxxxxxxXXXX.
+vuid=CHANGE_ME
+
+# --- local H.264 source (vp_project's livestream.cgi web server) ---
+cam_host=127.0.0.1
+cam_port=81
+streamid=10
+substream=2
+fps=15
+
+# --- RTSP ---
+rtsp_port=554
+rtsp_name=live
+
+# --- ONVIF (WS-Discovery + SOAP) ---
+onvif_port=80
+# device_ip=192.168.100.106   # uncomment to force an address instead of
+                              # auto-detecting per-client via getsockname()
+
+# ONVIF credentials -- what the OPERATOR TYPES INTO THE NVR (Synology
+# Surveillance Station, Frigate, Blue Iris, ...), completely separate from
+# devpw/vuid above (those are the camera's internal :81 livestream.cgi
+# credentials, never exposed over ONVIF). Every ONVIF operation except
+# GetSystemDateAndTime/GetHostname/GetWsdlUrl (and WS-Discovery, which
+# isn't SOAP) requires authentication -- ANY of a WS-Security
+# wsse:UsernameToken, HTTP Digest (RFC 2617), or HTTP Basic authenticates,
+# all checked against this same user/pass. Most NVRs (incl. Synology
+# Surveillance Station) use HTTP Digest, not WS-Security. Override via
+# --onvif-user/--onvif-pass too.
+onvif_user=admin
+onvif_pass=admin
+
+# --- descriptive only (shown to NVRs, doesn't affect the actual stream) ---
+manufacturer=OKAM
+model=BW4-T23N
+serial=okam-onvifd
+hardware_id=T23N
+
+# video_width/video_height are only a FALLBACK for the brief window before
+# the first SPS is observed -- ONVIF then advertises the real live stream
+# resolution (parsed from the actual SPS, e.g. 2304x1296 on cam #1).
+video_width=1920
+video_height=1080
+
+# 0=ERR 1=WARN 2=INFO 3=DEBUG
+log_level=2

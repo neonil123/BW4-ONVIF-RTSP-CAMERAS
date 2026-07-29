@@ -1,0 +1,22 @@
+# Never commit these — they contain per-unit secrets or vendor firmware/media.
+# Full-chip / partition dumps of your own camera:
+*full_backup*.bin
+*stock*.bin
+mtd*_backup*.bin
+readback*.bin
+# Any image built with REAL creds (public build outputs CHANGE_ME only):
+mycam*.bin
+my_cam*.bin
+my_image*.bin
+# Build scratch:
+_wk/
+_wk_clean/
+*.squashfs
+# Captures may contain credentials/WiFi info:
+*.raw
+*_capture*.txt
+*.pcap
+# Editor/OS
+*.swp
+.DS_Store
+Thumbs.db
