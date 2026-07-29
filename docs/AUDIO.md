@@ -54,7 +54,7 @@ Audio is captured by **our own** code on the device, not pulled from the app:
 - **Native mic format is 16 kHz / 16-bit / mono** (`samplerate=16000`; 640 samples = 40 ms per
   1280-byte frame, 25 fps). An earlier note guessed 8 kHz — wrong; that's what produced the
   octave-down pitch until the daemon downsample was added.
-- **`okam_onvifd`** receives `:5599`, **2:1 averaging-downsamples 16k→8k** (anti-alias low-pass +
+- **`cam_onvifd`** receives `:5599`, **2:1 averaging-downsamples 16k→8k** (anti-alias low-pass +
   decimate, carrying one sample across datagram boundaries), μ-law-encodes, and serves it as a
   **second RTP track** — `PCMU/8000`, payload type 0 — advertised in the RTSP SDP as
   `m=audio ... a=rtpmap:0 PCMU/8000 / a=control:track1`. Timestamp advances at 8 kHz. The live
@@ -109,7 +109,7 @@ comes out of the speaker.** This is the one unsolved item in the project.
 ### The pipeline (all working)
 ```
 NVR talk audio (G.711)
-  → okam_onvifd  speaker_sink.c   : UDP :5601, μ-law-decode, 8k→16k 2× linear upsample
+  → cam_onvifd  speaker_sink.c   : UDP :5601, μ-law-decode, 8k→16k 2× linear upsample
   → UDP 127.0.0.1:5600
   → speaker_feed.so               : vendor AO wrappers → IMP_AO_SendFrame → codec DAC
 ```

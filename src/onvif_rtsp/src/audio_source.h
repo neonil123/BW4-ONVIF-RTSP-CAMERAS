@@ -13,8 +13,8 @@
  * stream thread's own bounded ring (drop-oldest on overflow, so a slow client
  * never stalls the reader or the video path). Mirrors cam_source's pub/sub.
  */
-#ifndef OKAM_AUDIO_SOURCE_H
-#define OKAM_AUDIO_SOURCE_H
+#ifndef CAM_AUDIO_SOURCE_H
+#define CAM_AUDIO_SOURCE_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -70,4 +70,4 @@ void audio_source_unsubscribe(audio_source_t *src, audio_sub_t *sub);
  * timeout (no audio available -- the caller should just idle). */
 int audio_sub_get(audio_sub_t *sub, double timeout_sec, uint8_t *out);
 
-#endif /* OKAM_AUDIO_SOURCE_H */
+#endif /* CAM_AUDIO_SOURCE_H */

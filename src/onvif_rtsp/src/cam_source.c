@@ -274,11 +274,11 @@ static void frame_visit(const vsc_frame_t *f, void *ctx) {
 
 /* Sends the fixed livestream.cgi GET and peeks the first bytes to tell a
  * successful raw-stream start (leading VSC magic) from an HTTP-wrapped error
- * response, exactly like _handshake() in okam_rtsp_proxy.py. On success,
+ * response, exactly like _handshake() in cam_rtsp_proxy.py. On success,
  * out_head/out_head_len return the already-read bytes that must be fed to
  * the reassembler (they may contain the start of frame data). Returns a
  * connected socket fd, or -1 on any failure (logged). */
-static int handshake(const okam_config_t *cfg, uint8_t *out_head, size_t *out_head_len, size_t head_cap) {
+static int handshake(const cam_config_t *cfg, uint8_t *out_head, size_t *out_head_len, size_t head_cap) {
     struct sockaddr_in sa;
     memset(&sa, 0, sizeof sa);
     sa.sin_family = AF_INET;
@@ -442,7 +442,7 @@ static void *reader_loop(void *arg) {
     return NULL;
 }
 
-void cam_source_init(cam_source_t *src, const okam_config_t *cfg) {
+void cam_source_init(cam_source_t *src, const cam_config_t *cfg) {
     memset(src, 0, sizeof *src);
     src->cfg = *cfg;
     pthread_mutex_init(&src->subs_mu, NULL);

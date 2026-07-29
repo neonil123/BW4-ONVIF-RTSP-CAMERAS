@@ -15,7 +15,7 @@
 #define WSD_MCAST_ADDR    "239.255.255.250"
 #define WSD_PORT          3702
 #define WSD_RECV_BUF      8192
-#define WSD_PRIMARY_IFACE "vnet0"   /* the O-KAM QC3's WLAN interface (AIC8800 SDIO) */
+#define WSD_PRIMARY_IFACE "vnet0"   /* the QC3's WLAN interface (AIC8800 SDIO) */
 
 /* Namespace prefixes (e/wsa/d/dn/tds) and element shape match exactly what
  * the acceptance harness (tools/onvif_test) expects -- some quick WS-

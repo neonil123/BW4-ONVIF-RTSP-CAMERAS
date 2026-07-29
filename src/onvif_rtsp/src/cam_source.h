@@ -1,5 +1,5 @@
 /* cam_source — the camera hub. C port of VStarcamStreamSource in
- * tools/okam_rtsp_proxy.py: ONE reader thread opens the camera's local
+ * tools/cam_rtsp_proxy.py: ONE reader thread opens the camera's local
  * livestream.cgi, reassembles VStarcam frames into H.264 access units
  * (synthesized monotonic 90 kHz timestamps), tracks the latest SPS/PPS, and
  * fans each AU out to every subscribed RTSP client's own bounded queue
@@ -7,8 +7,8 @@
  * reader). Reconnects on EOF/error with capped exponential backoff, exactly
  * like the Python reference (the device EOFs livestream.cgi every ~123 s).
  */
-#ifndef OKAM_CAM_SOURCE_H
-#define OKAM_CAM_SOURCE_H
+#ifndef CAM_CAM_SOURCE_H
+#define CAM_CAM_SOURCE_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -54,7 +54,7 @@ typedef struct {
 } cam_params_t;
 
 typedef struct cam_source {
-    okam_config_t cfg;
+    cam_config_t cfg;
 
     cam_params_t params;
 
@@ -67,7 +67,7 @@ typedef struct cam_source {
     volatile int stop;
 } cam_source_t;
 
-void cam_source_init(cam_source_t *src, const okam_config_t *cfg);
+void cam_source_init(cam_source_t *src, const cam_config_t *cfg);
 void cam_source_start(cam_source_t *src);   /* idempotent */
 void cam_source_stop(cam_source_t *src);
 
@@ -93,4 +93,4 @@ void cam_source_unsubscribe(cam_source_t *src, cam_sub_t *sub);
  * au_buf_t* the caller must release with au_buf_release() when done. */
 au_buf_t *cam_sub_get(cam_sub_t *sub, double timeout_sec);
 
-#endif /* OKAM_CAM_SOURCE_H */
+#endif /* CAM_CAM_SOURCE_H */

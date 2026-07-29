@@ -6,7 +6,7 @@ current result.
 
 **Legend — Result:** ✅ passed live/offline · ⏳ awaiting bench gate · 🧪 offline-only so far ·
 🚧 needs an in-progress component. **Method:** *serial* = COM3 root shell · *proxy* = PC
-`okam_rtsp_proxy.py` + `ffprobe`/`ffmpeg` · *offline* = host-side unit test/disasm.
+`cam_rtsp_proxy.py` + `ffprobe`/`ffmpeg` · *offline* = host-side unit test/disasm.
 
 > Read the **on-device runnability constraints** (below) before running any serial test —
 > this busybox is missing most of the usual tools and several "obvious" checks give **false
@@ -54,7 +54,7 @@ saying "no tftp" was wrong. Consequences for tests:
 | 1.7 | Each shim `.so` is well-formed | `objdump`/`readelf` per `verify.sh`/`verify.py` | DYN MIPS o32 mips32r2 PIC, no NEEDED libs, `.init_array` ctor, UND syms = expected libc, target `lui` immediates present | all shims | ✅ |
 | 1.8 | Shim address re-proof vs `vp_project.bin` | `tools/app_gotpage.py -d <addr>`, feature `verify.*` | each target VA materialized by absolute `lui/ori`, no GOT/`$gp` coupling | reproduced | ✅ |
 | 1.9 | Image diff: integrated `/system` vs stock | integrated `build_integrated.sh` self-verify | only `bin/vp_project` (wrapper) + 4 `lib/*.so` added; nothing changed/removed; mtd0/2/3/appfs byte-identical | diff = additions only | ✅ |
-| 1.10 | Artifact md5s match docs | `md5sum` the built files | integrated=`6b1203e6…`, okam_onvifd=`8435ab9b…`, okabweb_v5=`822795eb…`, wifi_sd=`f3c6c2ab…`, pir_sleep=`0cf8afb9…`, battery_osd=`119900999…` | exact | ✅ |
+| 1.10 | Artifact md5s match docs | `md5sum` the built files | integrated=`6b1203e6…`, cam_onvifd=`8435ab9b…`, camweb_v5=`822795eb…`, wifi_sd=`f3c6c2ab…`, pir_sleep=`0cf8afb9…`, battery_osd=`119900999…` | exact | ✅ |
 
 **`test_stream.py` overall: 18 passed, 0 failed.** Run it before every proxy change (RTSP
 regression gate).
@@ -65,8 +65,8 @@ regression gate).
 
 | # | Test | Method | Expected | Pass criterion | Result |
 |---|---|---|---|---|---|
-| 2.1 | SD present + image md5 pre-flight | serial `md5sum /mnt/sda0/mtd4_integrated.bin` | `154ea4fbef9a515c56934f6d39a66f66` | exact; **abort flash on mismatch** | ✅ (gate in `flash_integrated.ps1`) |
-| 2.2 | Revert image md5 pre-flight | serial `md5sum /mnt/sda0/mtd4_okabweb_v8.bin` | `fb1266aa06d4faa7d1efa46c844d304f` | exact | ✅ |
+| 2.1 | SD present + image md5 pre-flight | serial `md5sum /mnt/sda0/mtd4_integrated.bin` | `949ddff9eef4a6cdfd215ec1169c74eb` | exact; **abort flash on mismatch** | ✅ (gate in `flash_integrated.ps1`) |
+| 2.2 | Revert image md5 pre-flight | serial `md5sum /mnt/sda0/mtd4_camweb_v8.bin` | `fb1266aa06d4faa7d1efa46c844d304f` | exact | ✅ |
 | 2.3 | Live `mtd4` backed up before flash | serial `cat /dev/mtd4 > /mnt/sda0/mtd4_backup_live.bin; md5sum` | non-empty, md5 recorded | file present | ✅ |
 | 2.4 | flashcp succeeds | serial `flashcp -v … /dev/mtd4` | no `error/failed/busy` in output | clean | ✅ |
 | 2.5 | flashcp readback matches | (v8 path) readback md5 == written | equal | exact | ✅ (v8) |
@@ -76,12 +76,12 @@ regression gate).
 
 ## 3. Per-feature functional tests  (bench)
 
-### 3.1 okabweb — `:81` web server / RTSP unlock  ✅
+### 3.1 camweb — `:81` web server / RTSP unlock  ✅
 
 | # | Test | Method | Expected | Pass |
 |---|---|---|---|---|
 | a | `:81` binds | serial `netstat -ltn` | `tcp 0.0.0.0:81 LISTEN` | ✅ |
-| b | LD_PRELOAD present | serial `cat /proc/$(pidof vp_project)/environ \| tr '\0' '\n' \| grep LD_PRELOAD` | lists `okabweb.so` first | ✅ |
+| b | LD_PRELOAD present | serial `cat /proc/$(pidof vp_project)/environ \| tr '\0' '\n' \| grep LD_PRELOAD` | lists `camweb.so` first | ✅ |
 | c | create_web NOP applied (RAM) | serial `dd if=/proc/$(pidof vp_project)/mem bs=1 skip=514932 count=4 of=/tmp/b; md5sum /tmp/b` | 4 × `00` (md5 of `00000000`) | ✅ |
 | d | livestream serves H.264 (auth OK) | PC: raw `GET /livestream.cgi?…streamid=10&substream=2` | first 4 bytes = `55 aa 15 a8` (frame magic, no HTTP header) | ✅ |
 | e | wrong pw / streamid rejected | PC: bad `loginpas` or `streamid=0` | HTTP body `result=-1;…` (no magic) | ✅ |
@@ -133,7 +133,7 @@ regression gate).
 |---|---|---|---|---|---|
 | R1 | **WiFi survives the 4-shim LD_PRELOAD chain** | after boot: serial `ifconfig vnet0` | `inet addr` present within ~90 s | has IP ⇒ `unsetenv` guard held; **no IP ⇒ revert** | **High** |
 | R2 | busybox children load clean | serial: confirm `udhcpc` ran / route table populated | default route present, DHCP lease | not empty | High |
-| R3 | okabweb still first / present | serial `…/environ \| grep LD_PRELOAD` | `okabweb.so` leads the list | first token | High |
+| R3 | camweb still first / present | serial `…/environ \| grep LD_PRELOAD` | `camweb.so` leads the list | first token | High |
 | R4 | `:81` binds after reboot | serial `netstat -ltn` | `0.0.0.0:81 LISTEN` | present | Med |
 | R5 | **Reboot persistence** | `reboot`; re-run R1 + 3.1 | all four shims active, WiFi + `:81` up | all green after reboot | High |
 | R6 | OTA/internet blocked | serial `route -n` | two `/1` reject routes present; LAN `/24` still reachable | reject routes present | Med |
@@ -164,7 +164,7 @@ removed); no RTCP is emitted on UDP → **use the default TCP transport**.
 
 ## 6. ONVIF / RTSP daemon  ✅ (harness + offline suites + live cold-boot)
 
-The on-device daemon (`okam_onvifd`) is real and verified. Three test layers.
+The on-device daemon (`cam_onvifd`) is real and verified. Three test layers.
 
 ### 6a. PC acceptance harness — `tools/onvif_test/`  ✅
 

@@ -5,8 +5,8 @@
  * onvif_srvd/prudynt-t template bundled in builds/prudynt_bundle/onvif
  * (wsd_files/ProbeMatches.xml) for maximum client compatibility.
  */
-#ifndef OKAM_ONVIF_WSD_H
-#define OKAM_ONVIF_WSD_H
+#ifndef CAM_ONVIF_WSD_H
+#define CAM_ONVIF_WSD_H
 
 typedef struct {
     int port;              /* device_service port, e.g. 80 */
@@ -29,4 +29,4 @@ void onvif_wsd_init(onvif_wsd_t *w, int onvif_port, const char *manufacturer,
 int onvif_wsd_run(onvif_wsd_t *w);
 void onvif_wsd_stop(onvif_wsd_t *w);
 
-#endif /* OKAM_ONVIF_WSD_H */
+#endif /* CAM_ONVIF_WSD_H */

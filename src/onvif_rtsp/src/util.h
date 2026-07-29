@@ -1,8 +1,8 @@
 /* Small shared helpers: base64, local-IP discovery, id/uuid generation,
  * monotonic time, and leveled logging to stderr (line-buffered, matches the
  * Python proxy's logging so serial/log capture on-device looks familiar). */
-#ifndef OKAM_UTIL_H
-#define OKAM_UTIL_H
+#ifndef CAM_UTIL_H
+#define CAM_UTIL_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -51,4 +51,4 @@ void log_msg(int level, const char *fmt, ...);
 double monotonic_seconds(void);
 void sleep_seconds(double s);
 
-#endif /* OKAM_UTIL_H */
+#endif /* CAM_UTIL_H */

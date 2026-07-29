@@ -3,8 +3,8 @@
  * timestamp tick. Callback-based send (identical shape to rtp_h264's
  * rtp_send_cb) so the RTSP layer stays transport-agnostic.
  */
-#ifndef OKAM_RTP_PCMU_H
-#define OKAM_RTP_PCMU_H
+#ifndef CAM_RTP_PCMU_H
+#define CAM_RTP_PCMU_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -25,4 +25,4 @@ void rtp_pcmu_packetize(const uint8_t *mulaw, size_t nbytes,
                         uint16_t *seq, uint32_t *ts, uint32_t ssrc,
                         rtp_pcmu_send_cb cb, void *ctx);
 
-#endif /* OKAM_RTP_PCMU_H */
+#endif /* CAM_RTP_PCMU_H */

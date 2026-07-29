@@ -7,8 +7,8 @@
  * plain UDP, one thread per accepted control connection plus one streaming
  * thread per PLAYing session.
  */
-#ifndef OKAM_RTSP_SERVER_H
-#define OKAM_RTSP_SERVER_H
+#ifndef CAM_RTSP_SERVER_H
+#define CAM_RTSP_SERVER_H
 
 #include "cam_source.h"
 #include "audio_source.h"
@@ -32,4 +32,4 @@ void rtsp_server_init(rtsp_server_t *s, cam_source_t *src, audio_source_t *asrc,
 int rtsp_server_serve_forever(rtsp_server_t *s);
 void rtsp_server_stop(rtsp_server_t *s);
 
-#endif /* OKAM_RTSP_SERVER_H */
+#endif /* CAM_RTSP_SERVER_H */

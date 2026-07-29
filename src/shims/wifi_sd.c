@@ -1,4 +1,4 @@
-/* wifi_sd.so — SD-card WiFi onboarding shim for O-KAM QC3 (VeePai BW6, T23N).
+/* wifi_sd.so — SD-card WiFi onboarding shim for QC3 (VeePai BW6, T23N).
  *
  * Drop a file "/mnt/sda0/wifi.ini" (or wifi.txt) on the SD card:
  *     SSID=MyNetwork
@@ -27,7 +27,7 @@
  *
  * Freestanding: no libc is linked. open/read/close/rename/sleep/pthread_* are
  * left undefined and resolved at load time against vp_project's own uClibc
- * (exactly as tools/okabweb/okabweb.c already does for pthread/sleep).
+ * (exactly as tools/camweb/camweb.c already does for pthread/sleep).
  *
  * Reversible: delete the .so / drop it from LD_PRELOAD; no bytes of vp_project
  * are modified.

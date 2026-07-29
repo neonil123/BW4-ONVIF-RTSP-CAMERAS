@@ -7,8 +7,8 @@
  * the wsse:Security header is located and its fields extracted by scanning
  * for element names, tolerant of the namespace prefix used.
  */
-#ifndef OKAM_WSSE_H
-#define OKAM_WSSE_H
+#ifndef CAM_WSSE_H
+#define CAM_WSSE_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -48,4 +48,4 @@ void wsse_compute_digest(const uint8_t *nonce_raw, size_t nonce_len,
  * skewed; the digest itself is what authenticates). Returns 1 on success. */
 int wsse_authenticate(const wsse_token_t *tok, const char *want_user, const char *want_pass);
 
-#endif /* OKAM_WSSE_H */
+#endif /* CAM_WSSE_H */

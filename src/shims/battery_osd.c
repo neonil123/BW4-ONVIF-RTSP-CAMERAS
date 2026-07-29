@@ -1,5 +1,5 @@
 /* battery_osd.so  --  LD_PRELOAD shim that renders the live battery percentage
- * onto the O-KAM QC3 (VeePai BW6, Ingenic T23N) video OSD overlay.
+ * onto the QC3 (VeePai BW6, Ingenic T23N) video OSD overlay.
  *
  * Feature: show the real battery level on the on-screen timestamp overlay,
  * sourced from the SAME value the vendor sleep logic and the app use, with no

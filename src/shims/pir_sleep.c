@@ -1,5 +1,5 @@
 /* pir_sleep.so — LD_PRELOAD shim that ENABLES vp_project's own vendor
- * "Smart_Electricity_Sleep" battery-saving feature on the O-KAM QC3
+ * "Smart_Electricity_Sleep" battery-saving feature on the QC3
  * (VeePai BW6, Ingenic T23N): below <THRESHOLD>%% battery the camera enters the
  * vendor low-power / AOV deep-sleep (PIR-wake), and resumes normal streaming
  * once the battery recovers (vendor +10%% hysteresis). Solar+battery unit.

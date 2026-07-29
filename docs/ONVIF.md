@@ -1,8 +1,8 @@
-# ONVIF / RTSP on the device — `okam_onvifd`
+# ONVIF / RTSP on the device — `cam_onvifd`
 
 The camera now serves **standards RTSP and full ONVIF Profile-S from a daemon running on
 the camera itself** — no PC in the loop. This is the primary media path; the PC proxy
-(`tools/okam_rtsp_proxy.py`, see [ARCHITECTURE.md](ARCHITECTURE.md) §4) is now a
+(`tools/cam_rtsp_proxy.py`, see [ARCHITECTURE.md](ARCHITECTURE.md) §4) is now a
 dev/fallback tool.
 
 - **RTSP:** `rtsp://<cam-ip>:554/live` — H.264, 2304×1296, ~15 fps `[verified]`
@@ -11,21 +11,21 @@ dev/fallback tool.
 - **Verified live** against a real **Synology Surveillance Station** NVR (native ONVIF add)
   and after a **cold boot** (auto-starts from the flashed image). `[verified]`
 
-`okam_onvifd` is a static MIPS32r2 LE C daemon (`builds/features/onvif_rtsp/`, source in
+`cam_onvifd` is a static MIPS32r2 LE C daemon (`builds/features/onvif_rtsp/`, source in
 `src/`). It is a byte-for-byte C port of the already-proven Python stack
-(`tools/vstarcam_frame.py` + `tools/rtsp_server.py` + `tools/okam_rtsp_proxy.py`). It
+(`tools/vstarcam_frame.py` + `tools/rtsp_server.py` + `tools/cam_rtsp_proxy.py`). It
 connects to the camera's own local H.264 source (`vp_project`'s `livestream.cgi` at
-`127.0.0.1:81`, exposed by the `okabweb.so` shim — see [FEATURES.md](FEATURES.md)) and
+`127.0.0.1:81`, exposed by the `camweb.so` shim — see [FEATURES.md](FEATURES.md)) and
 re-serves it. `vp_project` contains **no** RTSP/ONVIF code of its own (probed with
 `tools/app_onvif.py`), so this is a genuinely new on-device component, not an unlock.
 
 | artifact | value |
 |---|---|
-| daemon binary | `builds/features/onvif_rtsp/okam_onvifd` |
+| daemon binary | `builds/features/onvif_rtsp/cam_onvifd` |
 | md5 (stripped) | **`8435ab9bcb6c1c235befcfd498b7cef9`** |
 | size | 210,888 bytes (~206 KiB), static MIPS32r2 LE ELF (`Type: EXEC`, no `PT_INTERP`) |
-| unstripped | `okam_onvifd.unstripped`, md5 `6d2ffd7bff76c836ab6d28d41abc5a55` |
-| config | `/system/etc/okam_onvifd.conf` (template: `okam_onvifd.conf.example`) |
+| unstripped | `cam_onvifd.unstripped`, md5 `6d2ffd7bff76c836ab6d28d41abc5a55` |
+| config | `/system/etc/cam_onvifd.conf` (template: `cam_onvifd.conf.example`) |
 | runbook | `builds/features/onvif_rtsp/DEPLOY.md` |
 
 > **Why static, not dynamic against the device uClibc 0.9.33.** No uClibc cross-toolchain
@@ -78,7 +78,7 @@ Surveillance Station's add-camera wizard, which was the acceptance target):
   `env:Receiver`/`ter:ActionNotSupported` (never a bare 500), so a client can tolerate a
   missing non-critical op instead of aborting.
 
-> **Contradiction flagged:** the comment in `okam_onvifd.conf.example` (and the header of
+> **Contradiction flagged:** the comment in `cam_onvifd.conf.example` (and the header of
 > `config.c`) says *"Every ONVIF operation except GetSystemDateAndTime/GetHostname/GetWsdlUrl
 > requires authentication."* That is **stale/inverted** — the shipped code does the
 > opposite (only `GetStreamUri` is gated; everything else is pre-auth open). Trust the code
@@ -224,12 +224,12 @@ segment; the two harness warnings about discovery (see [TESTING.md](TESTING.md))
 
 The daemon is **baked into the integrated `/system` image and auto-starts on boot** (the
 wrapper waits for `:81`, copies the binary into `/tmp`, `chmod`s it, and runs it with
-`/system/etc/okam_onvifd.conf`). See [FLASHING.md](FLASHING.md) §4 for the persistent-install
+`/system/etc/cam_onvifd.conf`). See [FLASHING.md](FLASHING.md) §4 for the persistent-install
 and TFTP-flash mechanics, and `builds/features/onvif_rtsp/DEPLOY.md` for the run-it-now serial
 path.
 
-**Config precedence:** `--devpw`/`--vuid`/`--onvif-user`/`--onvif-pass` CLI > `OKAM_DEVPW`/
-`OKAM_VUID` env > `/system/etc/okam_onvifd.conf`. Only `devpw`/`vuid` truly need setting.
+**Config precedence:** `--devpw`/`--vuid`/`--onvif-user`/`--onvif-pass` CLI > `CAM_DEVPW`/
+`CAM_VUID` env > `/system/etc/cam_onvifd.conf`. Only `devpw`/`vuid` truly need setting.
 They are **per-unit random** (the pilot's are `devpw=<your-unit-devpw>`, `vuid=<your-unit-vuid>`,
 used only as a worked example — your unit differs; re-read `devpw` from
 `/proc/$(pidof vp_project)/mem @0x81E988` if the camera is re-onboarded). `build_integrated.sh`

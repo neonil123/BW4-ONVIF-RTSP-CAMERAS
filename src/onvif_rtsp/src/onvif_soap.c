@@ -67,7 +67,7 @@ static void send_401(const httpauth_ctx_t *actx, int fd, const char *body, size_
     if (blen) { ssize_t r = write(fd, body, blen); (void)r; }
 }
 
-/* `out` must be at least sizeof(okam_config_t.device_ip) bytes (see call
+/* `out` must be at least sizeof(cam_config_t.device_ip) bytes (see call
  * sites: they size their local buffer to match, not the 16 bytes a bare
  * dotted-quad would need, since device_ip may hold a hostname override). */
 static void device_ip(onvif_soap_t *s, int fd, char *out, size_t out_cap) {
@@ -202,7 +202,7 @@ static const char PROFILES_TMPL[] =
     "                   xmlns:tt=\"http://www.onvif.org/ver10/schema\">\r\n"
     "  <SOAP-ENV:Body><trt:GetProfilesResponse>\r\n"
     "    <trt:Profiles token=\"profile0\" fixed=\"true\">\r\n"
-    "      <tt:Name>okam-main</tt:Name>\r\n"
+    "      <tt:Name>cam-main</tt:Name>\r\n"
     "      <tt:VideoSourceConfiguration token=\"vsconf0\">\r\n"
     "        <tt:Name>VideoSourceConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:SourceToken>vs0</tt:SourceToken>\r\n"
     "        <tt:Bounds x=\"0\" y=\"0\" width=\"%d\" height=\"%d\"/>\r\n"
@@ -239,7 +239,7 @@ static const char PROFILE_TMPL[] =
     "                   xmlns:tt=\"http://www.onvif.org/ver10/schema\">\r\n"
     "  <SOAP-ENV:Body><trt:GetProfileResponse>\r\n"
     "    <trt:Profile token=\"profile0\" fixed=\"true\">\r\n"
-    "      <tt:Name>okam-main</tt:Name>\r\n"
+    "      <tt:Name>cam-main</tt:Name>\r\n"
     "      <tt:VideoSourceConfiguration token=\"vsconf0\">\r\n"
     "        <tt:Name>VideoSourceConfig</tt:Name><tt:UseCount>1</tt:UseCount><tt:SourceToken>vs0</tt:SourceToken>\r\n"
     "        <tt:Bounds x=\"0\" y=\"0\" width=\"%d\" height=\"%d\"/>\r\n"
@@ -898,7 +898,7 @@ static void extract_simple_value(const char *body, size_t blen, const char *tag,
  * a real JPEG, so the only reliable signal is the JPEG magic (FF D8 FF),
  * not the upstream header. Tries /snapshot.cgi first, falls back to
  * /onvifsnapshot.cgi (both confirmed live on cam #1). */
-static uint8_t *fetch_snapshot_path(const okam_config_t *cfg, const char *path, size_t *out_len) {
+static uint8_t *fetch_snapshot_path(const cam_config_t *cfg, const char *path, size_t *out_len) {
     *out_len = 0;
     struct sockaddr_in sa;
     memset(&sa, 0, sizeof sa);
@@ -967,7 +967,7 @@ static uint8_t *fetch_snapshot_path(const okam_config_t *cfg, const char *path, 
     return out;
 }
 
-static uint8_t *fetch_snapshot(const okam_config_t *cfg, size_t *out_len) {
+static uint8_t *fetch_snapshot(const cam_config_t *cfg, size_t *out_len) {
     static const char *paths[] = { "/snapshot.cgi", "/onvifsnapshot.cgi" };
     for (size_t i = 0; i < sizeof paths / sizeof paths[0]; i++) {
         uint8_t *buf = fetch_snapshot_path(cfg, paths[i], out_len);
@@ -1505,7 +1505,7 @@ static void *accept_loop(void *arg) {
     return NULL;
 }
 
-void onvif_soap_init(onvif_soap_t *s, const okam_config_t *cfg, const char *device_uuid,
+void onvif_soap_init(onvif_soap_t *s, const cam_config_t *cfg, const char *device_uuid,
                       cam_source_t *src) {
     memset(s, 0, sizeof *s);
     s->cfg = *cfg;

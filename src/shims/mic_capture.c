@@ -3,7 +3,7 @@
  * only, no SetPubAttr/Enable/EnableChn -> zero state change, WiFi/video intact
  * (proven by imp_dev1_capture). Each 1280 B / 40 ms S16LE 16 kHz mono frame is
  * sent as one UDP datagram to MIC_DEST (default 127.0.0.1:5599) where
- * okam_onvifd turns it into an RTP audio track.
+ * cam_onvifd turns it into an RTP audio track.
  *
  * Env:
  *   MIC_DEST=a.b.c.d:port  (default 127.0.0.1:5599)

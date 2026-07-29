@@ -1,6 +1,6 @@
 #!/bin/bash
 # build_clean_image.sh -- assemble a PUBLIC-SAFE flashable mtd4 (/system) overlay
-# for the O-KAM BW4. Unlike build_integrated.sh (which unsquashes the vendor stock
+# for the BW4. Unlike build_integrated.sh (which unsquashes the vendor stock
 # /system and adds our files, thereby carrying the vendor voice-prompt media),
 # this builds /system FROM SCRATCH with ONLY our own files plus tiny neutral
 # text stubs. No vendor .opus/.g711a/logo assets, no per-unit secrets.
@@ -12,19 +12,19 @@
 # (see docs/STOCK_SYSTEM.md).
 #
 # Run from WSL:
-#   wsl -- bash /mnt/h/projects/Repos/NeoSystems/O-KamProHack/builds/features/integrated/build_clean_image.sh
+#   wsl -- bash /mnt/h/projects/Repos/NeoSystems/camhack/builds/features/integrated/build_clean_image.sh
 set -e
-ROOT=/mnt/h/projects/Repos/NeoSystems/O-KamProHack
+ROOT=/mnt/h/projects/Repos/NeoSystems/camhack
 F=$ROOT/builds/features
 DIR=$F/integrated
 MTD4_SZ=$((0x60000))            # 393216
 W=$DIR/_wk_clean
 
-OKABWEB=$ROOT/tools/okabweb/okabweb_v5.so
+CAMWEB=$ROOT/tools/camweb/camweb_v5.so
 BAT=$F/battery_osd/battery_osd.so
 WIFI=$F/wifi_sd/wifi_sd.so
 PIR=$F/pir_sleep/pir_sleep.so
-ONVIFD=$F/onvif_rtsp/okam_onvifd
+ONVIFD=$F/onvif_rtsp/cam_onvifd
 MICCAP=$F/audio/mic_capture/mic_capture.so
 # NOTE: speaker_feed.so (talk-back) is intentionally NOT built into this image.
 # It manipulates the shared jz-inner-codec (IMP_AO SetPubAttr/Enable) and was
@@ -39,14 +39,14 @@ MICCAP=$F/audio/mic_capture/mic_capture.so
 DEVPW=${DEVPW:-CHANGE_ME}
 VUID=${VUID:-CHANGE_ME}
 
-for f in "$OKABWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
+for f in "$CAMWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
   [ -f "$f" ] || { echo "ERROR missing $f"; exit 1; }
 done
 
 rm -rf "$W"; mkdir -p "$W/sys/bin" "$W/sys/lib" "$W/sys/etc" "$W/sys/www" "$W/sys/version"
 
 echo "=== our libs -> /system/lib ==="
-cp "$OKABWEB" "$W/sys/lib/okabweb.so"
+cp "$CAMWEB" "$W/sys/lib/camweb.so"
 cp "$WIFI"    "$W/sys/lib/wifi_sd.so"
 cp "$PIR"     "$W/sys/lib/pir_sleep.so"
 cp "$BAT"     "$W/sys/lib/battery_osd.so"
@@ -54,8 +54,8 @@ cp "$MICCAP"  "$W/sys/lib/mic_capture.so"
 chmod 0755 "$W/sys/lib/"*.so
 
 echo "=== daemon -> /system/bin + conf (CHANGE_ME) ==="
-cp "$ONVIFD" "$W/sys/bin/okam_onvifd"; chmod 0755 "$W/sys/bin/okam_onvifd"
-cat > "$W/sys/etc/okam_onvifd.conf" <<EOF
+cp "$ONVIFD" "$W/sys/bin/cam_onvifd"; chmod 0755 "$W/sys/bin/cam_onvifd"
+cat > "$W/sys/etc/cam_onvifd.conf" <<EOF
 # per-unit device creds for the local livestream.cgi handshake.
 # REPLACE these with your unit's values before flashing (see docs/FLASHING.md).
 devpw=$DEVPW
@@ -79,10 +79,10 @@ printf 'community_overlay:bw4-onvif-rtsp\n' > "$W/sys/version/version.ini"
 echo "=== /system/bin/vp_project wrapper (unified LD_PRELOAD chain) ==="
 cat > "$W/sys/bin/vp_project" <<'EOS'
 #!/bin/sh
-# UNIFIED O-KAM BW4 shim wrapper. /system/bin is first on PATH so this shadows
+# UNIFIED BW4 shim wrapper. /system/bin is first on PATH so this shadows
 # /usr/bin/vp_project; the real binary is exec'd by absolute path (no recursion).
 #
-# 1) NOP the create_web onboarding gate in the RAM copy so okabweb can bind :81
+# 1) NOP the create_web onboarding gate in the RAM copy so camweb can bind :81
 #    (REQUIRED on an onboarded cam; stored pw != "888888" so create_web self-bails).
 #    On-disk /usr/bin/vp_project is NEVER modified -- this dd hits the live copy only.
 printf '\000\000\000\000' | dd of=/usr/bin/vp_project bs=1 seek=514932 count=4 conv=notrunc 2>/dev/null
@@ -110,20 +110,20 @@ printf '\000\000\000\000' | dd of=/usr/bin/vp_project bs=1 seek=347216 count=4 c
     fi
     n=$((n+1)); sleep 3
   done ) &
-# 3) on-device ONVIF/RTSP daemon: wait for okabweb to bind :81, then start it.
+# 3) on-device ONVIF/RTSP daemon: wait for camweb to bind :81, then start it.
 ( n=0
   while [ $n -lt 90 ]; do
     if netstat -ltn 2>/dev/null | grep -q "0.0.0.0:81 "; then
-      cp /system/bin/okam_onvifd /tmp/okam_onvifd 2>/dev/null
-      chmod 0755 /tmp/okam_onvifd 2>/dev/null
-      /tmp/okam_onvifd --conf /system/etc/okam_onvifd.conf > /tmp/okam_onvifd.log 2>&1
+      cp /system/bin/cam_onvifd /tmp/cam_onvifd 2>/dev/null
+      chmod 0755 /tmp/cam_onvifd 2>/dev/null
+      /tmp/cam_onvifd --conf /system/etc/cam_onvifd.conf > /tmp/cam_onvifd.log 2>&1
       break
     fi
     n=$((n+1)); sleep 2
   done ) &
-# 4) ONE LD_PRELOAD list for ALL features. okabweb.so leads: its constructor
+# 4) ONE LD_PRELOAD list for ALL features. camweb.so leads: its constructor
 #    unsetenv("LD_PRELOAD")s so busybox children (udhcpc) don't inherit the chain.
-export LD_PRELOAD="/system/lib/okabweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so /system/lib/mic_capture.so "
+export LD_PRELOAD="/system/lib/camweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so /system/lib/mic_capture.so "
 # 5) hand off to the real binary.
 exec /usr/bin/vp_project "$@"
 EOS
@@ -150,7 +150,7 @@ echo "=== VERIFY tree (must contain NO vendor media) ==="
 rm -rf "$W/verify"; unsquashfs -d "$W/verify" "$OUT" >/dev/null 2>&1
 find "$W/verify" -type f | sed "s#$W/verify##" | sort
 echo "--- secret scan: conf must still hold CHANGE_ME placeholders ---"
-if grep -q '^devpw=CHANGE_ME' "$W/verify/etc/okam_onvifd.conf" && grep -q '^vuid=CHANGE_ME' "$W/verify/etc/okam_onvifd.conf"; then
+if grep -q '^devpw=CHANGE_ME' "$W/verify/etc/cam_onvifd.conf" && grep -q '^vuid=CHANGE_ME' "$W/verify/etc/cam_onvifd.conf"; then
   echo "CLEAN: no per-unit secrets (placeholders intact)"
 else
   echo "WARN: conf no longer holds CHANGE_ME placeholders -- do NOT publish this image"

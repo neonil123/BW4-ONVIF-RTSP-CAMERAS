@@ -5,7 +5,7 @@ production deploy writes **only `mtd4`** with `flashcp`. DFU is the last-resort 
 channel and has one hard rule.
 
 > ### Read this first (public image)
-> - The image in **`firmware/mtd4_integrated.bin`** (md5 `154ea4fbef9a515c56934f6d39a66f66`)
+> - The image in **`firmware/mtd4_integrated.bin`** (md5 `949ddff9eef4a6cdfd215ec1169c74eb`)
 >   is built with **`devpw=CHANGE_ME`**. Flashed as-is it will boot and expose ONVIF, but the
 >   `:81` handshake fails so **there is no video** until you supply your unit's credentials.
 > - **Make a working image for your camera:** read your unit's device password
@@ -28,7 +28,7 @@ channel and has one hard rule.
 3. **Never reflash `mtd3`.** The T23 uses a **hardware LZMA** decoder that rejects any
    re-compressed rootfs (even a no-op) → `lzma dec timeout` boot loop. See
    [ARCHITECTURE.md](ARCHITECTURE.md) §2. This is why everything ships via `mtd4`.
-4. **okabweb must stay first in the LD_PRELOAD chain** — it's what keeps WiFi alive. The
+4. **camweb must stay first in the LD_PRELOAD chain** — it's what keeps WiFi alive. The
    integrated image already does this; don't hand-edit the chain.
 
 ---
@@ -36,7 +36,7 @@ channel and has one hard rule.
 ## Prerequisites
 
 - Camera **already onboarded** to WiFi (creds in `mtd5` NVS). If not, onboard first (via the
-  O-KAM app on **pure stock** — the shim interferes with initial pairing — or use the
+  vendor app on **pure stock** — the shim interferes with initial pairing — or use the
   `wifi_sd` SD-card method once that's deployed).
 - A **working SD slot** with a FAT card. (Historical caution: on the pilot the SD slot
   physically failed after ~10 insert/flash cycles — treat the slot gently; a dead slot blocks
@@ -61,13 +61,13 @@ Pre-flight md5 gates (abort if any mismatches — do **not** DFU to "fix" the SD
 
 ```sh
 mount | grep sda0                                   # SD must be at /mnt/sda0
-md5sum /mnt/sda0/mtd4_integrated.bin                # MUST equal 154ea4fbef9a515c56934f6d39a66f66
-md5sum /mnt/sda0/mtd4_okabweb_v8.bin                # MUST equal fb1266aa06d4faa7d1efa46c844d304f
+md5sum /mnt/sda0/mtd4_integrated.bin                # MUST equal 949ddff9eef4a6cdfd215ec1169c74eb
+md5sum /mnt/sda0/mtd4_camweb_v8.bin                # MUST equal fb1266aa06d4faa7d1efa46c844d304f
 cat /dev/mtd4 > /mnt/sda0/mtd4_backup_live.bin && md5sum /mnt/sda0/mtd4_backup_live.bin  # extra revert
 ```
 
-> The md5 to verify is **`154ea4fbef9a515c56934f6d39a66f66`** — the current
-> `mtd4_integrated.bin`, which carries the four shims **plus `okam_onvifd`** and auto-starts
+> The md5 to verify is **`949ddff9eef4a6cdfd215ec1169c74eb`** — the current
+> `mtd4_integrated.bin`, which carries the four shims **plus `cam_onvifd`** and auto-starts
 > the daemon on boot. Two older values are **stale**: `0b3273fd…` was the 4-shim build before
 > the daemon was baked in, and the integrated `README.md` / `BENCH_FLASH_INTEGRATED.md`
 > runbook cite `6cd7c13a…` (older still, before the final battery_osd/pir_sleep rebuilds).
@@ -117,7 +117,7 @@ python tools/tftp_server.py                 # serves builds/exfil/ on UDP 6900 (
 # device (serial root shell), <PC_IP> = the serving host:
 cd /tmp
 tftp -g -r mtd4_integrated.bin -l /tmp/mtd4_integrated.bin <PC_IP> 6900
-md5sum /tmp/mtd4_integrated.bin             # MUST equal 154ea4fbef9a515c56934f6d39a66f66
+md5sum /tmp/mtd4_integrated.bin             # MUST equal 949ddff9eef4a6cdfd215ec1169c74eb
 kill -9 $(pidof vp_project) 2>/dev/null ; sleep 2
 umount /system 2>/dev/null
 flashcp -v /tmp/mtd4_integrated.bin /dev/mtd4
@@ -143,15 +143,15 @@ The integrated image's `/system/bin/vp_project` wrapper (which PATH-shadows the 
 [ARCHITECTURE.md](ARCHITECTURE.md) §2/§3) does five things at boot, in one place:
 
 1. **NOP the `create_web` onboarding gate** in the RAM copy (`dd … seek=514932 count=4`) so
-   `okabweb` can bind `:81`. On-disk `/usr/bin/vp_project` is never touched.
+   `camweb` can bind `:81`. On-disk `/usr/bin/vp_project` is never touched.
 2. **OTA block** (backgrounded, after `vnet0` gets an IP): add a `224.0.0.0/4` multicast
    route (so WS-Discovery egress works) **then** two `/1` reject routes (LAN `/24` stays
    reachable, the cloud does not).
-3. **Start `okam_onvifd`** (backgrounded): poll `netstat` until `0.0.0.0:81` is listening,
+3. **Start `cam_onvifd`** (backgrounded): poll `netstat` until `0.0.0.0:81` is listening,
    then — because `/system` is a read-only squashfs and the packaged binary may lack `+x` —
-   **copy `/system/bin/okam_onvifd` → `/tmp/okam_onvifd`, `chmod 0755`**, and run it with
-   `--conf /system/etc/okam_onvifd.conf` (logs to `/tmp/okam_onvifd.log`).
-4. **One `LD_PRELOAD`** listing all four shims, `okabweb.so` first (its `unsetenv` guard
+   **copy `/system/bin/cam_onvifd` → `/tmp/cam_onvifd`, `chmod 0755`**, and run it with
+   `--conf /system/etc/cam_onvifd.conf` (logs to `/tmp/cam_onvifd.log`).
+4. **One `LD_PRELOAD`** listing all four shims, `camweb.so` first (its `unsetenv` guard
    keeps WiFi alive — [ARCHITECTURE.md](ARCHITECTURE.md) §3).
 5. `exec /usr/bin/vp_project`.
 
@@ -160,7 +160,7 @@ and RTSP `:554` + ONVIF `:80` all live — **verified after a real cold boot** (
 2304×1296 15 fps, ONVIF up, snapshot up, self-heal on the ~123 s EOF measured at ~0.38 s). The
 `/tmp` staging means the daemon is **not** persistent by itself; persistence comes from it
 being baked into the flashed `/system` image and re-staged by the wrapper each boot. The
-per-unit `devpw`/`vuid` are baked into `/system/etc/okam_onvifd.conf` at build time via
+per-unit `devpw`/`vuid` are baked into `/system/etc/cam_onvifd.conf` at build time via
 `build_integrated.sh`'s `DEVPW=`/`VUID=` env (public repo ships `CHANGE_ME`). Full wrapper
 source: `builds/features/integrated/build_integrated.sh`.
 
@@ -186,6 +186,10 @@ its pre-flash behaviour and keeps the WiFi creds intact. (This is why the golden
 
 Only if the camera won't boot at all. **This erases WiFi creds — you will re-onboard and
 re-read the device password.** Procedure (from the hard-won `FLASHING.md` at the repo root):
+
+> **First time / bricked unit?** Getting into BootROM requires opening the camera and shorting
+> two flash pins during power-on — see [HARDWARE_DFU.md](HARDWARE_DFU.md) for the disassembly +
+> pin-short walkthrough. This section covers the PC-side transfer once `a108:c309` enumerates.
 
 **Tools:** `tools/thingino-dfu/…/thingino-dfu.exe` (bootstrap only, `-b`/`-l`),
 `tools/dfu-util/…/dfu-util.exe` (all transfers — `thingino-dfu -w/-r` do **not** work on this
@@ -241,7 +245,7 @@ SD, then `flashcp`'d. Hard limits learned at the bench:
 ## The Thingino full-firmware path (Track B) — flashes, but WiFi is blocked
 
 For completeness: a full **Thingino** firmware
-(`tools/thingino-okam_qc3_t23n_gc2083_aic8800u.bin`, sha256 `99ae51bda3…`) flashes and
+(`tools/thingino-qc3_t23n_gc2083_aic8800u.bin`, sha256 `99ae51bda3…`) flashes and
 **boots** cleanly via the DFU flow above (GC2083, prudynt, uhttpd, ONVIF; login
 root/thingino). **But AIC8800U WiFi never enumerates** — `wlan0` never appears, the
 `aic8800_fdrv`/`aic_load_fw` drivers register but never probe (the USB chip doesn't enumerate

@@ -18,7 +18,7 @@ that purpose. Do not use it against hardware you do not own or are not authorize
 
 ## No vendor firmware or media is redistributed
 - The prebuilt overlay in `firmware/` is assembled **from scratch** and contains **only**:
-  our own compiled binaries (`okam_onvifd`, the `*.so` shims), our own shell wrapper, our own
+  our own compiled binaries (`cam_onvifd`, the `*.so` shims), our own shell wrapper, our own
   config with placeholder creds, and a few **neutral text stubs** (`language.txt`, an empty
   `upgrade.txt`, a community `version.ini`).
 - It deliberately excludes the vendor's `/system` content — the voice-prompt audio (`*.opus`,

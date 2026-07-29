@@ -1,9 +1,9 @@
-/* Configuration: /system/etc/okam_onvifd.conf (key=value, '#' comments),
- * overridable by environment variables OKAM_DEVPW / OKAM_VUID, overridable
+/* Configuration: /system/etc/cam_onvifd.conf (key=value, '#' comments),
+ * overridable by environment variables CAM_DEVPW / CAM_VUID, overridable
  * again by CLI flags. No credential lookup logic lives here on purpose --
  * the operator populates devpw/vuid at install time. */
-#ifndef OKAM_CONFIG_H
-#define OKAM_CONFIG_H
+#ifndef CAM_CONFIG_H
+#define CAM_CONFIG_H
 
 typedef struct {
     char cam_host[64];      /* local H.264 source host, default 127.0.0.1 */
@@ -36,11 +36,11 @@ typedef struct {
     int  video_height;      /* fallback only, default 1080 (see video_width) */
 
     int  log_level;
-} okam_config_t;
+} cam_config_t;
 
 /* Fills `cfg` with defaults, then overlays the conf file (if it exists) and
- * OKAM_DEVPW/OKAM_VUID env vars. `conf_path` may be NULL to use the default
- * /system/etc/okam_onvifd.conf. */
-void config_load(okam_config_t *cfg, const char *conf_path);
+ * CAM_DEVPW/CAM_VUID env vars. `conf_path` may be NULL to use the default
+ * /system/etc/cam_onvifd.conf. */
+void config_load(cam_config_t *cfg, const char *conf_path);
 
-#endif /* OKAM_CONFIG_H */
+#endif /* CAM_CONFIG_H */

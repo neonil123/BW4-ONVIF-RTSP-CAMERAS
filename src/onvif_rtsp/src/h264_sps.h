@@ -2,8 +2,8 @@
  * width/height (post-cropping) so ONVIF can advertise the real stream
  * resolution instead of a configured guess (substreams/sensors differ).
  */
-#ifndef OKAM_H264_SPS_H
-#define OKAM_H264_SPS_H
+#ifndef CAM_H264_SPS_H
+#define CAM_H264_SPS_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -17,4 +17,4 @@
  * the actual RTSP stream to work). */
 int h264_sps_get_resolution(const uint8_t *nal, size_t len, int *out_width, int *out_height);
 
-#endif /* OKAM_H264_SPS_H */
+#endif /* CAM_H264_SPS_H */

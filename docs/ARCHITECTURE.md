@@ -11,7 +11,7 @@ passing offline test) vs **[planned]** (designed / under construction).
 
 ## 1. Hardware
 
-**Camera:** O-KAM **BW4** (VeePai/Vstarcam-family; earlier working notes mislabelled it "QC3"/"BW6" — same hardware). Owner has 5; all work is on one **pilot** (cam #1).
+**Camera:** the **BW4** (VeePai/Vstarcam-family; earlier working notes mislabelled it "QC3"/"BW6" — same hardware). Owner has 5; all work is on one **pilot** (cam #1).
 
 | Block | Detail |
 |---|---|
@@ -124,14 +124,14 @@ All four features are delivered by **one** `/system/bin/vp_project` wrapper with
 ```sh
 #!/bin/sh
 REAL=/usr/bin/vp_project
-# (1) NOP the create_web onboarding gate in the RAM copy so okabweb can bind :81
+# (1) NOP the create_web onboarding gate in the RAM copy so camweb can bind :81
 [ -f "$REAL" ] && printf '\000\000\000\000' | dd of="$REAL" bs=1 seek=514932 count=4 conv=notrunc 2>/dev/null
 # (2) background: once vnet0 has an IP, install OTA-block reject routes (LAN /24 stays up)
 ( while ! ifconfig vnet0 2>/dev/null | grep -q 'inet addr'; do sleep 2; done
   route add -net 0.0.0.0   netmask 128.0.0.0 reject
   route add -net 128.0.0.0 netmask 128.0.0.0 reject ) &
-# (3) one LD_PRELOAD listing all four shims — okabweb FIRST (see below)
-export LD_PRELOAD="/system/lib/okabweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so"
+# (3) one LD_PRELOAD listing all four shims — camweb FIRST (see below)
+export LD_PRELOAD="/system/lib/camweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so"
 # (4) hand off to the real, unmodified binary (still lives in stock mtd3)
 exec "$REAL" "$@"
 ```
@@ -142,7 +142,7 @@ exec "$REAL" "$@"
   the NOP is **required** for `:81` to bind. It edits only the **RAM** copy of the binary —
   the on-disk `/usr/bin/vp_project` in `mtd3` is never modified. [verified]
 
-### Why `okabweb` must lead — the `unsetenv` protection [verified, hard dependency]
+### Why `camweb` must lead — the `unsetenv` protection [verified, hard dependency]
 
 All four `.so` import `pthread_create`. Inside `vp_project` that resolves fine (it links
 uClibc + libpthread). But `vp_project` spawns **busybox** children — `udhcpc` (DHCP),
@@ -155,27 +155,27 @@ resolve `pthread_create` and dies:
 ```
 
 The killer consequence: `udhcpc` never runs → **no DHCP → no WiFi** (`vnet0` absent, empty
-route table). This is exactly what broke `okabweb` v1/v2, and (subtly) also broke the very
+route table). This is exactly what broke `camweb` v1/v2, and (subtly) also broke the very
 first WiFi *onboarding*.
 
-**The fix that shipped (v4/v5):** `okabweb`'s constructor calls **`unsetenv("LD_PRELOAD")`
+**The fix that shipped (v4/v5):** `camweb`'s constructor calls **`unsetenv("LD_PRELOAD")`
 first**, before `vp_project` spawns any child. `vp_project`'s children exec with a clean
-environment and load busybox normally; `okabweb` (and the other three shims) stay active
+environment and load busybox normally; `camweb` (and the other three shims) stay active
 **inside** `vp_project` because they were already loaded when the process started. This only
-works if the `unsetenv`-doer runs first, so **okabweb must stay first in the chain**
-(verified: only `okabweb_v5.so` exports `unsetenv`; the other three do not).
+works if the `unsetenv`-doer runs first, so **camweb must stay first in the chain**
+(verified: only `camweb_v5.so` exports `unsetenv`; the other three do not).
 
 > Dead-ends worth knowing: (a) a plain 45-second worker delay did **not** help — the failure
 > is at **load**, before any shim code runs. (b) declaring the pthread/sleep imports
-> `__attribute__((weak))` (okabweb v3) so busybox would load the `.so` with NULL stubs
-> **failed** on this uClibc 0.9.33 (`can't load library 'okabweb_v3.so'` — weak-undef not
+> `__attribute__((weak))` (camweb v3) so busybox would load the `.so` with NULL stubs
+> **failed** on this uClibc 0.9.33 (`can't load library 'camweb_v3.so'` — weak-undef not
 > honored). The `unsetenv` route is the only one that works here.
 
 ### Shim target map — disjoint, no overlap [verified by disassembly]
 
 | shim | reads | writes / calls | worker |
 |---|---|---|---|
-| `okabweb.so` | — | `create_web` `0x47db44`, web-fd `0x7e8db8`; RAM NOP `0x47db74` | 1 thread |
+| `camweb.so` | — | `create_web` `0x47db44`, web-fd `0x7e8db8`; RAM NOP `0x47db74` | 1 thread |
 | `wifi_sd.so` | `/mnt/sda0/wifi.ini` | `0x453a2c(ssid,pwd,2)` → sink `0x48e134` → creds `0x8111b0`, connect `0x48ba1c` | 1 thread |
 | `pir_sleep.so` | getter `0x48d0ec` | config `0x821858`=1, `0x821859`=50 (base `0x81e850` via getter `0x5d7fd8`) | 1 thread |
 | `battery_osd.so` | getter `0x48d0ec` | OSD text `0x80d814`, dirty bit `0x80d788` bit7 (region base `0x80d774`, stride `0x6f0`) | 1 thread |
@@ -195,9 +195,9 @@ Because there is **no ESP32**, the app's local web/CGI server never starts:
 `vp_web_create_socket` (`0x47db44`) is **present but unreachable** — its bootstrap is
 compiled out (no `if(esp32)` branch, no reachable caller). It is a **no-arg, idempotent**
 routine that binds a listen socket and stores the fd at `0x7e8db8` (`-1` until bound).
-`okabweb.so` spawns a worker that simply **calls it** in a retry loop until the fd goes
+`camweb.so` spawns a worker that simply **calls it** in a retry loop until the fd goes
 valid. Live result: it binds **`0.0.0.0:81`** (LAN-reachable — *not* `127.0.0.1` as the
-original RE assumed and as the stale `okabweb.c` comment still says).
+original RE assumed and as the stale `camweb.c` comment still says).
 
 Once `:81` is up, the camera's own **`livestream.cgi`** serves H.264:
 
@@ -251,17 +251,17 @@ corruption.
 ### 4d. On the PC: the RTSP proxy [verified — now the dev/fallback path]
 
 > **Superseded as the primary path.** The RTSP endpoint now lives **on the camera**
-> (`okam_onvifd`, §4e / [ONVIF.md](ONVIF.md)). The PC proxy below is kept as a dev/debug and
+> (`cam_onvifd`, §4e / [ONVIF.md](ONVIF.md)). The PC proxy below is kept as a dev/debug and
 > fallback tool — it is a byte-for-byte Python sibling of the daemon's C code, and the daemon
 > reproduces its architecture and fixes. Everything in this section still holds when you run
 > the proxy; it just isn't how a deployed camera streams anymore.
 
-`tools/okam_rtsp_proxy.py` (+ `rtsp_server.py`, `vstarcam_frame.py`) turns `:81` into a
+`tools/cam_rtsp_proxy.py` (+ `rtsp_server.py`, `vstarcam_frame.py`) turns `:81` into a
 standard `rtsp://<pc>:8554/live` (SDP `H264/90000`, `profile-level-id=640032`, sprop from
 the live SPS/PPS; RFC-6184 FU-A fragmentation for the large IDRs):
 
 ```
-python tools/okam_rtsp_proxy.py --connect 192.168.100.106:81 \
+python tools/cam_rtsp_proxy.py --connect 192.168.100.106:81 \
     --user admin --pwd <devpw> --vuid <VUID> \
     --streamid 10 --substream 2 --port 8554 --name live --fps 15
 ```
@@ -289,12 +289,12 @@ socket/thread/subscriber leak, working set flat ~20–22 MB, `test_stream.py` **
 Residual (both minor/by-design): the ~123 s device cutoff is firmware (mitigated to ~0.5 s,
 not eliminated); no RTCP emitted on UDP (use the default TCP transport).
 
-### 4e. On the device: `okam_onvifd` — the primary media path [verified]
+### 4e. On the device: `cam_onvifd` — the primary media path [verified]
 
-The RTSP endpoint now lives **on the camera**. `okam_onvifd`
-(`builds/features/onvif_rtsp/okam_onvifd`, static MIPS32r2 LE, md5
+The RTSP endpoint now lives **on the camera**. `cam_onvifd`
+(`builds/features/onvif_rtsp/cam_onvifd`, static MIPS32r2 LE, md5
 **`8435ab9bcb6c1c235befcfd498b7cef9`**) is a C port of the exact Python stack in §4d
-(`vstarcam_frame.py` + `rtsp_server.py` + `okam_rtsp_proxy.py`). It runs as a client of the
+(`vstarcam_frame.py` + `rtsp_server.py` + `cam_rtsp_proxy.py`). It runs as a client of the
 same local `livestream.cgi` — connecting to **`127.0.0.1:81`** on the device (the proxy
 connects to `<cam-ip>:81` from the PC) — and re-serves it as:
 
@@ -307,7 +307,7 @@ connects to `<cam-ip>:81` from the PC) — and re-serves it as:
 `tools/app_onvif.py`), so this is a genuinely new on-device component, not an unlock. It is
 **purely additive** — it never stops or patches `vp_project`, so the AIC `cmd6` keepalive
 (§1) stays intact and there is no watchdog juggling. It respects the same constraints as the
-shims (uClibc-free because it's static; needs the `okabweb` `:81` unlock; subject to the AIC
+shims (uClibc-free because it's static; needs the `camweb` `:81` unlock; subject to the AIC
 power gate on battery). It's baked into the integrated image and **auto-starts on boot** via
 the wrapper (see [FLASHING.md](FLASHING.md) §4). Verified live against a real Synology NVR and
 after a cold boot.

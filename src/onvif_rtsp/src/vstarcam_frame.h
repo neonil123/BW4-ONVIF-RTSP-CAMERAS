@@ -1,12 +1,12 @@
 /* vstarcam_frame — C port of tools/vstarcam_frame.py
  *
- * Reassembles the O-KAM/VeePai local media stream (length-prefixed
+ * Reassembles the VeePai local media stream (length-prefixed
  * 0xA815AA55 frame container) into complete frames, and splits Annex-B
  * H.264 payloads into NAL units. This is a byte-for-byte port: keep any
  * change mirrored in the Python reference (tests compare the two).
  */
-#ifndef OKAM_VSTARCAM_FRAME_H
-#define OKAM_VSTARCAM_FRAME_H
+#ifndef CAM_VSTARCAM_FRAME_H
+#define CAM_VSTARCAM_FRAME_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -59,4 +59,4 @@ static inline int vsc_nal_type(const uint8_t *nal, size_t len) {
     return len ? (nal[0] & 0x1F) : 0;
 }
 
-#endif /* OKAM_VSTARCAM_FRAME_H */
+#endif /* CAM_VSTARCAM_FRAME_H */

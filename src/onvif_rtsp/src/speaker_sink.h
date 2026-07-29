@@ -1,4 +1,4 @@
-/* speaker_sink -- talk-back ingress for okam_onvifd.
+/* speaker_sink -- talk-back ingress for cam_onvifd.
  *
  * Receives G.711 mu-law (PCMU/8000) talk audio from an NVR/app/phone on a UDP
  * port (default 5601), decodes to S16, upsamples 8k->16k (the vendor's own

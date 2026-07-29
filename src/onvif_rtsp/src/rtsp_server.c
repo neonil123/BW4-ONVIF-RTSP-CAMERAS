@@ -19,8 +19,8 @@
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 
-#define OKAM_SSRC       0xCAFEBABEu   /* video (track0) */
-#define OKAM_AUDIO_SSRC 0xCAFED00Du   /* audio (track1), distinct from video */
+#define CAM_SSRC       0xCAFEBABEu   /* video (track0) */
+#define CAM_AUDIO_SSRC 0xCAFED00Du   /* audio (track1), distinct from video */
 #define CONN_BUF_CAP 8192
 #define REQ_IDLE_TIMEOUT_SEC 30
 
@@ -222,7 +222,7 @@ static void build_sdp(rtsp_server_t *rs, char *out, size_t out_cap) {
     snprintf(out, out_cap,
              "v=0\r\n"
              "o=- 0 0 IN IP4 127.0.0.1\r\n"
-             "s=okam-rtsp\r\n"
+             "s=cam-rtsp\r\n"
              "t=0 0\r\n"
              "a=control:*\r\n"
              "m=video 0 RTP/AVP %d\r\n"
@@ -278,7 +278,7 @@ static void *stream_thread(void *arg_) {
     while (!sess->stop) {
         double now_sr = monotonic_seconds();
         if (now_sr >= next_sr && sess->track[TRACK_VIDEO].sr_pkts > 0) {
-            send_sender_report(sess, TRACK_VIDEO, OKAM_SSRC);
+            send_sender_report(sess, TRACK_VIDEO, CAM_SSRC);
             next_sr = now_sr + 1.0; /* ~1 s cadence keeps A/V sync tight */
         }
         au_buf_t *item = cam_sub_get(sub, 0.5);
@@ -310,7 +310,7 @@ static void *stream_thread(void *arg_) {
             n++;
         }
 
-        rtp_packetize_au(nal_ptrs, nal_lens, n, &seq, item->ts, OKAM_SSRC, RTP_DEFAULT_MTU,
+        rtp_packetize_au(nal_ptrs, nal_lens, n, &seq, item->ts, CAM_SSRC, RTP_DEFAULT_MTU,
                           rtp_cb_bridge, &sc);
         au_buf_release(item);
     }
@@ -346,12 +346,12 @@ static void *audio_stream_thread(void *arg_) {
     while (!sess->stop) {
         double now_sr = monotonic_seconds();
         if (now_sr >= next_sr && sess->track[TRACK_AUDIO].sr_pkts > 0) {
-            send_sender_report(sess, TRACK_AUDIO, OKAM_AUDIO_SSRC);
+            send_sender_report(sess, TRACK_AUDIO, CAM_AUDIO_SSRC);
             next_sr = now_sr + 1.0;
         }
         if (!audio_sub_get(sub, 0.5, chunk))
             continue; /* idle: no mic audio right now */
-        rtp_pcmu_packetize(chunk, sizeof chunk, &seq, &ts, OKAM_AUDIO_SSRC,
+        rtp_pcmu_packetize(chunk, sizeof chunk, &seq, &ts, CAM_AUDIO_SSRC,
                            rtp_cb_bridge, &sc);
     }
 

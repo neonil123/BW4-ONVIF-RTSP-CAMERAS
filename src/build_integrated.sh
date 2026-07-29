@@ -1,32 +1,32 @@
 #!/bin/bash
-# build_integrated.sh -- assemble the UNIFIED O-KAM QC3 deployable: ONE mtd4
+# build_integrated.sh -- assemble the UNIFIED QC3 deployable: ONE mtd4
 # (/system) XZ-squashfs carrying all four LD_PRELOAD shims + a single
-# /system/bin/vp_project wrapper, deployed exactly like the proven okabweb v8
+# /system/bin/vp_project wrapper, deployed exactly like the proven camweb v8
 # image (standard mksquashfs -- NO jzlzma; the mtd3 jzlzma reflash path is dead,
-# see memory okam-jzlzma: T23 HW-LZMA rejects the encoder -> boot loop).
+# see memory cam-jzlzma: T23 HW-LZMA rejects the encoder -> boot loop).
 #
 # Run from WSL:
-#   wsl -- bash /mnt/h/projects/Repos/NeoSystems/O-KamProHack/builds/features/integrated/build_integrated.sh
+#   wsl -- bash /mnt/h/projects/Repos/NeoSystems/camhack/builds/features/integrated/build_integrated.sh
 set -e
-ROOT=/mnt/h/projects/Repos/NeoSystems/O-KamProHack
+ROOT=/mnt/h/projects/Repos/NeoSystems/camhack
 F=$ROOT/builds/features
 DIR=$F/integrated
 STOCK_MTD4=$ROOT/builds/patched/mtd4_system_STOCK.bin
 MTD4_SZ=$((0x60000))            # 393216
 W=$DIR/_wk
 
-OKABWEB=$ROOT/tools/okabweb/okabweb_v5.so   # unsetenv build (protects busybox/udhcpc children)
+CAMWEB=$ROOT/tools/camweb/camweb_v5.so   # unsetenv build (protects busybox/udhcpc children)
 BAT=$F/battery_osd/battery_osd.so
 WIFI=$F/wifi_sd/wifi_sd.so
 PIR=$F/pir_sleep/pir_sleep.so
-ONVIFD=$F/onvif_rtsp/okam_onvifd            # on-device standalone RTSP:554 + ONVIF:80 daemon (now with G.711 audio track)
-MICCAP=$F/audio/mic_capture/mic_capture.so  # persistent pure-read of IMP AI dev1 -> UDP 127.0.0.1:5599 (feeds okam_onvifd audio); zero state change, WiFi-safe
+ONVIFD=$F/onvif_rtsp/cam_onvifd            # on-device standalone RTSP:554 + ONVIF:80 daemon (now with G.711 audio track)
+MICCAP=$F/audio/mic_capture/mic_capture.so  # persistent pure-read of IMP AI dev1 -> UDP 127.0.0.1:5599 (feeds cam_onvifd audio); zero state change, WiFi-safe
 # devpw/vuid are PER-UNIT -- pass real values via env for a real build; the public
 # repo ships CHANGE_ME placeholders (never commit a real device password).
 DEVPW=${DEVPW:-CHANGE_ME}
 VUID=${VUID:-CHANGE_ME}
 
-for f in "$STOCK_MTD4" "$OKABWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
+for f in "$STOCK_MTD4" "$CAMWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
   [ -f "$f" ] || { echo "ERROR missing $f"; exit 1; }
 done
 
@@ -35,19 +35,19 @@ echo "=== unsquashfs stock /system ==="
 unsquashfs -d "$W/sys" "$STOCK_MTD4" >/dev/null 2>&1
 echo "stock top-level:"; ls "$W/sys"
 
-echo "=== add /system/lib/{okabweb,wifi_sd,pir_sleep,battery_osd}.so ==="
+echo "=== add /system/lib/{camweb,wifi_sd,pir_sleep,battery_osd}.so ==="
 mkdir -p "$W/sys/lib" "$W/sys/bin"
-cp "$OKABWEB" "$W/sys/lib/okabweb.so"
+cp "$CAMWEB" "$W/sys/lib/camweb.so"
 cp "$WIFI"    "$W/sys/lib/wifi_sd.so"
 cp "$PIR"     "$W/sys/lib/pir_sleep.so"
 cp "$BAT"     "$W/sys/lib/battery_osd.so"
 cp "$MICCAP"  "$W/sys/lib/mic_capture.so"
 chmod 0755 "$W/sys/lib/"*.so
 
-echo "=== add /system/bin/okam_onvifd + /system/etc/okam_onvifd.conf ==="
-cp "$ONVIFD" "$W/sys/bin/okam_onvifd"; chmod 0755 "$W/sys/bin/okam_onvifd"
+echo "=== add /system/bin/cam_onvifd + /system/etc/cam_onvifd.conf ==="
+cp "$ONVIFD" "$W/sys/bin/cam_onvifd"; chmod 0755 "$W/sys/bin/cam_onvifd"
 mkdir -p "$W/sys/etc"
-cat > "$W/sys/etc/okam_onvifd.conf" <<EOF
+cat > "$W/sys/etc/cam_onvifd.conf" <<EOF
 # per-unit device creds for the local livestream.cgi handshake
 devpw=$DEVPW
 vuid=$VUID
@@ -65,10 +65,10 @@ EOF
 echo "=== write single /system/bin/vp_project wrapper (unified LD_PRELOAD chain) ==="
 cat > "$W/sys/bin/vp_project" <<'EOS'
 #!/bin/sh
-# UNIFIED O-KAM QC3 shim wrapper. /system/bin is first on PATH so this shadows
+# UNIFIED QC3 shim wrapper. /system/bin is first on PATH so this shadows
 # /usr/bin/vp_project; the real binary is exec'd by absolute path (no recursion).
 #
-# 1) NOP the create_web onboarding gate in the RAM copy so okabweb can bind :81
+# 1) NOP the create_web onboarding gate in the RAM copy so camweb can bind :81
 #    (REQUIRED on an onboarded cam; stored pw != "888888" so create_web self-bails).
 #    On-disk /usr/bin/vp_project is NEVER modified -- this dd hits the live copy only.
 printf '\000\000\000\000' | dd of=/usr/bin/vp_project bs=1 seek=514932 count=4 conv=notrunc 2>/dev/null
@@ -84,24 +84,24 @@ printf '\000\000\000\000' | dd of=/usr/bin/vp_project bs=1 seek=514932 count=4 c
     fi
     n=$((n+1)); sleep 3
   done ) &
-# 3) on-device ONVIF/RTSP daemon: wait for okabweb to bind :81, then start it
+# 3) on-device ONVIF/RTSP daemon: wait for camweb to bind :81, then start it
 #    (it self-reconnects to the local H.264 source thereafter). Replaces the PC proxy.
 ( n=0
   while [ $n -lt 90 ]; do
     if netstat -ltn 2>/dev/null | grep -q "0.0.0.0:81 "; then
       # /system is a read-only squashfs (and the packaged binary may lack +x),
       # so stage into tmpfs and make it executable there before running.
-      cp /system/bin/okam_onvifd /tmp/okam_onvifd 2>/dev/null
-      chmod 0755 /tmp/okam_onvifd 2>/dev/null
-      /tmp/okam_onvifd --conf /system/etc/okam_onvifd.conf > /tmp/okam_onvifd.log 2>&1
+      cp /system/bin/cam_onvifd /tmp/cam_onvifd 2>/dev/null
+      chmod 0755 /tmp/cam_onvifd 2>/dev/null
+      /tmp/cam_onvifd --conf /system/etc/cam_onvifd.conf > /tmp/cam_onvifd.log 2>&1
       break
     fi
     n=$((n+1)); sleep 2
   done ) &
-# 4) ONE LD_PRELOAD list for ALL features -- no wrapper/rcS clobber. okabweb.so
+# 4) ONE LD_PRELOAD list for ALL features -- no wrapper/rcS clobber. camweb.so
 #    leads: its constructor unsetenv("LD_PRELOAD")s so busybox children (udhcpc)
 #    don't inherit the chain and fail to resolve pthread_create (which would kill WiFi).
-export LD_PRELOAD="/system/lib/okabweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so /system/lib/mic_capture.so "
+export LD_PRELOAD="/system/lib/camweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so /system/lib/mic_capture.so "
 # 5) hand off to the real binary.
 exec /usr/bin/vp_project "$@"
 EOS
@@ -130,7 +130,7 @@ rm -rf "$W/verify"
 unsquashfs -d "$W/verify" "$OUT" >/dev/null 2>&1
 echo "--- /system/bin/vp_project present ---"; ls -la "$W/verify/bin/vp_project"
 echo "--- /system/lib/*.so present + md5 match source ---"
-for pair in "okabweb.so:$OKABWEB" "wifi_sd.so:$WIFI" "pir_sleep.so:$PIR" "battery_osd.so:$BAT"; do
+for pair in "camweb.so:$CAMWEB" "wifi_sd.so:$WIFI" "pir_sleep.so:$PIR" "battery_osd.so:$BAT"; do
   n=${pair%%:*}; src=${pair##*:}
   a=$(md5sum "$W/verify/lib/$n" | awk '{print $1}')
   b=$(md5sum "$src" | awk '{print $1}')

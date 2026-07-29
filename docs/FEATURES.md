@@ -10,7 +10,7 @@
 > the authoritative firmware md5 is in [`firmware/mtd4_integrated.bin.md5`](../firmware).
 
 The deployable is a set of **`LD_PRELOAD` shims** that augment the stock `vp_project` **without
-modifying its binary**, plus **one on-device daemon** (`okam_onvifd`) that re-serves the
+modifying its binary**, plus **one on-device daemon** (`cam_onvifd`) that re-serves the
 camera's H.264 as ONVIF/RTSP. This page documents the four core shims + the daemon. The daemon is
 covered in full in **[ONVIF.md](ONVIF.md)**; the summary section is below.
 
@@ -28,24 +28,24 @@ per-feature notes and [the contradictions list in the project report].
 
 | shim | file | md5 | status |
 |---|---|---|---|
-| okabweb (v5) | `tools/okabweb/okabweb_v5.so` | `822795eb1732aaef79d21fb40dfe6938` | **verified live** |
+| camweb (v5) | `tools/camweb/camweb_v5.so` | `822795eb1732aaef79d21fb40dfe6938` | **verified live** |
 | wifi_sd | `builds/features/wifi_sd/wifi_sd.so` | `f3c6c2ab296d5c5cdfbb91fd0d4da53e` | offline-ok; apply seen live |
 | pir_sleep | `builds/features/pir_sleep/pir_sleep.so` | `0cf8afb9053a70c59edaa7471331f8e0` | offline-ok (thr=50) |
 | battery_osd | `builds/features/battery_osd/battery_osd.so` | `119900999bf56f65b1c652a79a0e2a8b` | verified live (display) |
 
-The integrated deployable that carries all four shims **plus `okam_onvifd`**:
-`builds/features/integrated/mtd4_integrated.bin`, md5 **`154ea4fbef9a515c56934f6d39a66f66`**
+The integrated deployable that carries all four shims **plus `cam_onvifd`**:
+`builds/features/integrated/mtd4_integrated.bin`, md5 **`949ddff9eef4a6cdfd215ec1169c74eb`**
 (recomputed from the current file). Two older values float around and are **stale**: the
 integrated `README.md` cites `6cd7c13a…` (predates the final battery_osd/pir_sleep rebuilds)
 and earlier `docs/` cited `0b3273fd…` (the 4-shim build *before* the daemon was baked in). The
 current image, which auto-starts the daemon on boot, is `6b1203e6…`.
 
-The daemon binary itself: `builds/features/onvif_rtsp/okam_onvifd`, md5
+The daemon binary itself: `builds/features/onvif_rtsp/cam_onvifd`, md5
 **`8435ab9bcb6c1c235befcfd498b7cef9`**.
 
 ---
 
-## okabweb.so — `:81` web-server / RTSP unlock  [verified live]
+## camweb.so — `:81` web-server / RTSP unlock  [verified live]
 
 **What:** starts `vp_project`'s built-in-but-disabled local web/CGI server so
 `livestream.cgi` serves H.264 on the LAN. This is the linchpin of the whole RTSP path.
@@ -58,19 +58,19 @@ The daemon binary itself: `builds/features/onvif_rtsp/okam_onvifd`, md5
   **required** for `:81` to bind. The wrapper `dd`-patches only the **RAM** copy.
 
 **Mechanism:** the constructor spawns a worker; after a short delay it calls
-`create_web()` in a loop until `*fd >= 0`. Source: `tools/okabweb/okabweb.c` (the shipped
-`okabweb_v5.so` adds the critical `unsetenv("LD_PRELOAD")` in its constructor + logging).
+`create_web()` in a loop until `*fd >= 0`. Source: `tools/camweb/camweb.c` (the shipped
+`camweb_v5.so` adds the critical `unsetenv("LD_PRELOAD")` in its constructor + logging).
 
 **Live facts that corrected the original RE:**
-- It binds **`0.0.0.0:81`** (LAN-reachable), **not** `127.0.0.1:81` (the `okabweb.c` header
-  comment and `tools/okabweb/README.md` still say 127.0.0.1 — **stale**).
+- It binds **`0.0.0.0:81`** (LAN-reachable), **not** `127.0.0.1:81` (the `camweb.c` header
+  comment and `tools/camweb/README.md` still say 127.0.0.1 — **stale**).
 - Version history worth knowing: v1/v2 broke WiFi (LD_PRELOAD cascaded to busybox
   `udhcpc`); v3 weak-symbol approach failed to load on uClibc 0.9.33; **v4 added
   `unsetenv`** (WiFi validated live); **v5** = v4 + the create_web poke + logging (shipped).
-  See [ARCHITECTURE.md](ARCHITECTURE.md) §3 for the full `unsetenv` reasoning — **okabweb
+  See [ARCHITECTURE.md](ARCHITECTURE.md) §3 for the full `unsetenv` reasoning — **camweb
   must stay first in the LD_PRELOAD chain**.
 
-**Delivery of just okabweb (RTSP-only):** `builds/patched/mtd4_okabweb_v8.bin`
+**Delivery of just camweb (RTSP-only):** `builds/patched/mtd4_camweb_v8.bin`
 (md5 `fb1266aa06d4faa7d1efa46c844d304f`) — also the **primary revert** target (back to a
 known-good RTSP-only state) staged on the SD during integrated flashing.
 
@@ -211,7 +211,7 @@ earlier broken build (rendered `… A 0%`) kept for reference.
 
 ---
 
-## okam_onvifd — on-device ONVIF/RTSP daemon  [verified live]
+## cam_onvifd — on-device ONVIF/RTSP daemon  [verified live]
 
 **What:** a static MIPS C daemon that runs **on the camera** and re-serves the local `:81`
 H.264 as **standards RTSP `:554/live`** + **full ONVIF `:80`** (Device/Media/Event SOAP +
@@ -219,12 +219,12 @@ WS-Discovery + snapshot). It is the **primary media path**; the PC proxy is now 
 Verified live against a real **Synology Surveillance Station** NVR and after a **cold boot**
 (auto-starts from the flashed image).
 
-- Binary: `builds/features/onvif_rtsp/okam_onvifd`, md5 **`8435ab9bcb6c1c235befcfd498b7cef9`**,
+- Binary: `builds/features/onvif_rtsp/cam_onvifd`, md5 **`8435ab9bcb6c1c235befcfd498b7cef9`**,
   210,888 bytes, static MIPS32r2 LE (`Type: EXEC`, no `PT_INTERP`).
 - Source: `builds/features/onvif_rtsp/src/` (C ports of `vstarcam_frame.py` / `rtsp_server.py`
-  / `okam_rtsp_proxy.py`, plus `onvif_soap.c`, `onvif_wsd.c`, `wsse.c`, `httpauth.c`, `md5.c`,
+  / `cam_rtsp_proxy.py`, plus `onvif_soap.c`, `onvif_wsd.c`, `wsse.c`, `httpauth.c`, `md5.c`,
   `h264_sps.c`). Build: `builds/features/onvif_rtsp/build.sh` (WSL musl MIPSEL cross).
-- Config: `/system/etc/okam_onvifd.conf` — per-unit `devpw`/`vuid` (for the `:81` handshake)
+- Config: `/system/etc/cam_onvifd.conf` — per-unit `devpw`/`vuid` (for the `:81` handshake)
   + `onvif_user`/`onvif_pass` (what the NVR types, default `admin`/`admin`). `build_integrated.sh`
   takes `DEVPW=`/`VUID=` env; ships `CHANGE_ME` placeholders.
 - **Purely additive** — never stops/patches `vp_project`, so the AIC keepalive stays intact.
@@ -238,10 +238,10 @@ accepted). This is what real Profile-S cameras do and what Synology needs. Full 
 
 ## Integrated image — four shims + the daemon
 
-`builds/features/integrated/mtd4_integrated.bin` (md5 **`154ea4fbef9a515c56934f6d39a66f66`**)
+`builds/features/integrated/mtd4_integrated.bin` (md5 **`949ddff9eef4a6cdfd215ec1169c74eb`**)
 is a single `/system` XZ-squashfs with one wrapper, all four `.so` in one `LD_PRELOAD`, and
-`okam_onvifd` (+ its conf) that the wrapper auto-starts once `:81` is up. See
+`cam_onvifd` (+ its conf) that the wrapper auto-starts once `:81` is up. See
 [ARCHITECTURE.md](ARCHITECTURE.md) §3 for the wrapper and chain-order dependency, and
 [FLASHING.md](FLASHING.md) §4 for the flash/revert/auto-start procedure. Components embedded
-(and verified byte-identical) in the image: `okabweb.so`=`822795eb…`, `wifi_sd.so`=`f3c6c2ab…`,
-`pir_sleep.so`=`0cf8afb9…`, `battery_osd.so`=`119900999…`, `okam_onvifd`=`8435ab9b…`.
+(and verified byte-identical) in the image: `camweb.so`=`822795eb…`, `wifi_sd.so`=`f3c6c2ab…`,
+`pir_sleep.so`=`0cf8afb9…`, `battery_osd.so`=`119900999…`, `cam_onvifd`=`8435ab9b…`.

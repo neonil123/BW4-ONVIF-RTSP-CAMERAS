@@ -22,8 +22,8 @@
  * HTTP-auth retry flow engages -- credentials are always accepted
  * additively even on the pre-auth ops, just never required there.
  */
-#ifndef OKAM_ONVIF_SOAP_H
-#define OKAM_ONVIF_SOAP_H
+#ifndef CAM_ONVIF_SOAP_H
+#define CAM_ONVIF_SOAP_H
 
 #include <pthread.h>
 #include "config.h"
@@ -31,7 +31,7 @@
 #include "httpauth.h"
 
 typedef struct {
-    okam_config_t cfg;
+    cam_config_t cfg;
     cam_source_t *src;   /* for the live SPS-derived resolution (h264_sps.c) */
     char uuid[40];
     httpauth_ctx_t httpauth;
@@ -45,9 +45,9 @@ typedef struct {
  * the live stream resolution (falls back to cfg->video_width/height until
  * the first SPS is observed); pass NULL to always use the configured
  * default (e.g. for standalone testing without a camera hub). */
-void onvif_soap_init(onvif_soap_t *s, const okam_config_t *cfg, const char *device_uuid,
+void onvif_soap_init(onvif_soap_t *s, const cam_config_t *cfg, const char *device_uuid,
                       cam_source_t *src);
 int onvif_soap_run(onvif_soap_t *s);   /* blocking accept loop */
 void onvif_soap_stop(onvif_soap_t *s);
 
-#endif /* OKAM_ONVIF_SOAP_H */
+#endif /* CAM_ONVIF_SOAP_H */

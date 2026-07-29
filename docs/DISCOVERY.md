@@ -1,7 +1,7 @@
 # Camera Discovery
 
 How an NVR/DVR (or you) finds the camera and gets a playable stream. The camera is now a
-**native ONVIF device** (`okam_onvifd`, see [ONVIF.md](ONVIF.md)) — but on a real home LAN
+**native ONVIF device** (`cam_onvifd`, see [ONVIF.md](ONVIF.md)) — but on a real home LAN
 you'll usually still **add it manually**, because WS-Discovery multicast rarely crosses the
 WiFi/wired boundary. This page explains both.
 
@@ -29,7 +29,7 @@ injects the latter into the `:81` handshake itself; you never enter it into the 
 
 ## WS-Discovery — works device-side, but auto-search usually fails on a home LAN
 
-`okam_onvifd` implements WS-Discovery correctly (UDP 3702, multicast `239.255.255.250`,
+`cam_onvifd` implements WS-Discovery correctly (UDP 3702, multicast `239.255.255.250`,
 `ProbeMatch` with `Types = NetworkVideoTransmitter` and `XAddrs = http://<cam-ip>:80/onvif/device_service`,
 unicast back to the Probe's source). Serial logs prove it receives every Probe and answers.
 `[verified device-side]`
@@ -60,7 +60,7 @@ as the primary path.
 `rtsp://`, `a=rtpmap`, `GetProfiles`, `onvif.org`, `NetworkVideoTransmitter`, `ws-discovery`,
 `wsdd`, …). The stock app speaks only the private VStarcam `0xA815AA55` frame protocol over
 its `:81` CGI and, for the cloud, a P2P protocol on `:19548`/`:20xxx`. ONVIF is therefore a
-**genuinely new on-device component** (`okam_onvifd`) added by this project, not a dormant
+**genuinely new on-device component** (`cam_onvifd`) added by this project, not a dormant
 feature that was unlocked.
 
 ---
@@ -71,7 +71,7 @@ The DVR always talks to whatever **hosts the RTSP/ONVIF endpoint**:
 
 - **Before:** endpoint = the **PC proxy** (`rtsp://<pc>:8554/live`); the camera spoke only its
   private `:81` protocol; discovery was you, manually, typing a URL.
-- **Now:** endpoint = the **camera** (`okam_onvifd`, `:554` + `:80`); the camera is an ONVIF
+- **Now:** endpoint = the **camera** (`cam_onvifd`, `:554` + `:80`); the camera is an ONVIF
   device the NVR adds and pulls directly. `[verified]`
 
 Same H.264 either way. The on-device move is what makes "add it as an ONVIF camera" possible;

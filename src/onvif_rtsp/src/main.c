@@ -1,4 +1,4 @@
-/* okam_onvifd — RTSP + ONVIF re-server for the O-KAM QC3 (Ingenic T23N).
+/* cam_onvifd — RTSP + ONVIF re-server for the QC3 (Ingenic T23N).
  *
  * Opens the camera's own local H.264 source (livestream.cgi on 127.0.0.1:81),
  * re-serves it as standards RTSP on :554 (/live), and makes the camera
@@ -8,7 +8,7 @@
  *
  * This is a line-for-line architectural port of the already-tested Python
  * prototype (tools/vstarcam_frame.py + tools/rtsp_server.py +
- * tools/okam_rtsp_proxy.py); see builds/features/onvif_rtsp/README.md.
+ * tools/cam_rtsp_proxy.py); see builds/features/onvif_rtsp/README.md.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,10 +50,10 @@ static void usage(const char *argv0) {
     fprintf(stderr,
         "usage: %s [--conf PATH] [--devpw PW] [--vuid VUID] [--onvif-port N]\n"
         "          [--onvif-user USER] [--onvif-pass PASS]\n"
-        "  Config defaults come from /system/etc/okam_onvifd.conf (or\n"
-        "  --conf PATH), overridable by env OKAM_DEVPW/OKAM_VUID, overridable\n"
+        "  Config defaults come from /system/etc/cam_onvifd.conf (or\n"
+        "  --conf PATH), overridable by env CAM_DEVPW/CAM_VUID, overridable\n"
         "  again by --devpw/--vuid/--onvif-port/--onvif-user/--onvif-pass.\n"
-        "  See okam_onvifd.conf.example.\n", argv0);
+        "  See cam_onvifd.conf.example.\n", argv0);
 }
 
 int main(int argc, char **argv) {
@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
         else { fprintf(stderr, "unknown arg: %s\n", argv[i]); usage(argv[0]); return 2; }
     }
 
-    okam_config_t cfg;
+    cam_config_t cfg;
     config_load(&cfg, conf_path);
     if (devpw_override) snprintf(cfg.devpw, sizeof cfg.devpw, "%s", devpw_override);
     if (vuid_override) snprintf(cfg.vuid, sizeof cfg.vuid, "%s", vuid_override);
@@ -86,10 +86,10 @@ int main(int argc, char **argv) {
     log_set_level(cfg.log_level);
 
     if (!cfg.devpw[0])
-        LOGW("no devpw configured (conf file / OKAM_DEVPW / --devpw) -- "
+        LOGW("no devpw configured (conf file / CAM_DEVPW / --devpw) -- "
              "the camera livestream.cgi handshake will fail until it is set");
 
-    LOGI("okam_onvifd starting: cam=%s:%d streamid=%d/%d rtsp=:%d/%s onvif=:%d",
+    LOGI("cam_onvifd starting: cam=%s:%d streamid=%d/%d rtsp=:%d/%s onvif=:%d",
          cfg.cam_host, cfg.cam_port, cfg.streamid, cfg.substream,
          cfg.rtsp_port, cfg.rtsp_name, cfg.onvif_port);
 
@@ -128,6 +128,6 @@ int main(int argc, char **argv) {
     rtsp_server_init(&g_rtsp, &g_cam, &g_audio, cfg.rtsp_port, cfg.rtsp_name);
     rtsp_server_serve_forever(&g_rtsp); /* blocks until rtsp_server_stop() */
 
-    LOGI("okam_onvifd: shutting down");
+    LOGI("cam_onvifd: shutting down");
     return 0;
 }

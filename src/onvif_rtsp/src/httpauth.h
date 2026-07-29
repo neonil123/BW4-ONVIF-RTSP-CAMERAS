@@ -6,12 +6,12 @@
  * an Authorization header. onvif_soap.c accepts either this OR a valid
  * WS-Security UsernameToken (see wsse.c) -- any one authenticates.
  */
-#ifndef OKAM_HTTPAUTH_H
-#define OKAM_HTTPAUTH_H
+#ifndef CAM_HTTPAUTH_H
+#define CAM_HTTPAUTH_H
 
 #include <stddef.h>
 
-#define HTTPAUTH_REALM "okam_onvifd"
+#define HTTPAUTH_REALM "cam_onvifd"
 
 typedef struct {
     char nonce[40]; /* generated once at startup, reused for the process's
@@ -47,4 +47,4 @@ int httpauth_validate(const httpauth_ctx_t *ctx, const char *authz_header, const
                        char *out_user, size_t out_user_cap,
                        char *out_scheme, size_t out_scheme_cap);
 
-#endif /* OKAM_HTTPAUTH_H */
+#endif /* CAM_HTTPAUTH_H */

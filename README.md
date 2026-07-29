@@ -1,7 +1,7 @@
-# O-KAM BW4 → native ONVIF / RTSP camera (cloud-free, local)
+# BW4 → native ONVIF / RTSP camera (cloud-free, local)
 
-Turn an **O-KAM BW4** battery/solar Wi-Fi camera (Ingenic **T23N**) — *your own hardware* — into
-a **standards ONVIF/RTSP camera** that any NVR pulls directly on your LAN, and retire the O-KAM /
+Turn a **BW4** battery/solar Wi-Fi camera (Ingenic **T23N**) — *your own hardware* — into
+a **standards ONVIF/RTSP camera** that any NVR pulls directly on your LAN, and retire the vendor /
 Eye4 cloud. The camera runs an on-device ONVIF/RTSP daemon, so Synology Surveillance Station,
 Frigate, Blue Iris, Hikvision NVRs, etc. add it like any other IP camera:
 
@@ -28,8 +28,8 @@ Legend: ✅ verified live on the camera · 🟡 built & host-verified, needs a b
 |---|---|---|
 | **RTSP `:554` H.264** (main 2304×1296 / sub 640×360) | ✅ | primary media path, on-device; self-heals on source EOF |
 | **ONVIF `:80`** (Device/Media/Events + WS-Discovery + snapshot) | ✅ | added live to a real Synology NVR, survives cold boot |
-| **`okabweb.so`** — enable the app's dormant local `:81` H.264 server | ✅ | binds `0.0.0.0:81`; `livestream.cgi` serves the stream |
-| **Wi-Fi survives the LD_PRELOAD chain** | ✅ | `okabweb.so` must lead (its `unsetenv` guard protects udhcpc) |
+| **`camweb.so`** — enable the app's dormant local `:81` H.264 server | ✅ | binds `0.0.0.0:81`; `livestream.cgi` serves the stream |
+| **Wi-Fi survives the LD_PRELOAD chain** | ✅ | `camweb.so` must lead (its `unsetenv` guard protects udhcpc) |
 | **OTA/internet block** (reject non-LAN routes) | ✅ | keeps multicast for WS-Discovery, rejects the rest |
 | **Microphone → RTSP** (G.711 μ-law, `PCMU/8000`, 2nd RTP track) | ✅ | native `IMP_AI` pure-read shim; coexists with the app — see [AUDIO.md](docs/AUDIO.md) |
 | **`battery_osd.so`** — real battery % on the OSD | ✅ | live voltage read; label is letter-free (partial OSD font) |
@@ -57,7 +57,7 @@ amp stage stays off. See [AUDIO.md](docs/AUDIO.md) for the exact wall and the mo
 | Flash | 8 MiB SPI NOR; `/system` = **mtd4** |
 | Power | USB-C + solar; optional battery. No ESP32 on the board. |
 
-> The camera is marketed as **O-KAM BW4** (also seen as BW4-N / BW4-Plus / "Okampro XH-BW4").
+> The camera is marketed as a **BW4** (also seen as BW4-N / BW4-Plus / XH-BW4).
 > Some of the internal notes this repo grew from mislabelled it "QC3"/"BW6" — that's the same
 > hardware.
 
@@ -71,9 +71,9 @@ adds a thin layer:
 
 1. A `/system/bin/vp_project` **wrapper** (PATH-shadows the real binary) sets up an `LD_PRELOAD`
    chain and starts the daemon at boot — the on-disk vendor binary is never patched.
-2. **`okabweb.so`** flips on the app's compiled-in-but-disabled local web server, so
+2. **`camweb.so`** flips on the app's compiled-in-but-disabled local web server, so
    `livestream.cgi` serves raw H.264 on `127.0.0.1:81`.
-3. **`okam_onvifd`** — a static MIPS C daemon on the camera — reads that local stream, re-frames it
+3. **`cam_onvifd`** — a static MIPS C daemon on the camera — reads that local stream, re-frames it
    to **RTSP `:554`** and serves **ONVIF `:80`** (SOAP + WS-Discovery + snapshot). It also mixes in
    a live **G.711 audio track** fed by `mic_capture.so` (a pure `IMP_AI` reader).
 4. A handful more `LD_PRELOAD` shims add battery-OSD, SD Wi-Fi onboarding, and PIR sleep. (The
@@ -111,7 +111,7 @@ After reboot the camera comes up with Wi-Fi, `:81`, RTSP `:554`, ONVIF `:80`, th
 the OSD/audio features live. Point your NVR at `rtsp://<cam-ip>:554/live` (ONVIF user/pass default
 `admin`/`admin`). Full procedure, the SD-free TFTP method, and recovery: [FLASHING.md](docs/FLASHING.md).
 
-> The prebuilt **`firmware/mtd4_integrated.bin`** (md5 `154ea4fbef9a515c56934f6d39a66f66`) is
+> The prebuilt **`firmware/mtd4_integrated.bin`** (md5 `949ddff9eef4a6cdfd215ec1169c74eb`) is
 > committed with `devpw=CHANGE_ME` and **no vendor voice-prompt media** — it's the reference
 > structure and boots, but produces **no video** until you rebuild with your creds (step 2). To
 > keep the camera's spoken voice prompts, build from your own stock `/system` dump instead — see
@@ -123,10 +123,10 @@ the OSD/audio features live. Point your NVR at `rtsp://<cam-ip>:554/live` (ONVIF
 
 ```
 firmware/  mtd4_integrated.bin        clean flashable overlay (CHANGE_ME, no vendor media) + .md5
-bin/       okam_onvifd, *.so          our prebuilt MIPS binaries (daemon + 5 LD_PRELOAD shims)
+bin/       cam_onvifd, *.so          our prebuilt MIPS binaries (daemon + 5 LD_PRELOAD shims)
 src/
   onvif_rtsp/src/                      the on-device ONVIF/RTSP/audio daemon (C)
-  shims/                               okabweb, wifi_sd, pir_sleep, battery_osd, mic_capture
+  shims/                               camweb, wifi_sd, pir_sleep, battery_osd, mic_capture
   build_clean_image.sh                 build the public-safe overlay (from scratch, your creds via env)
   build_integrated.sh                  build from YOUR camera's stock /system (keeps voice prompts)
 docs/

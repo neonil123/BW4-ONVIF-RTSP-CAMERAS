@@ -22,7 +22,7 @@ void httpauth_init(httpauth_ctx_t *ctx) {
      * header comment); a fresh MD5'd seed just gives a clean fixed-length
      * hex nonce, not a security boundary. */
     char seed[80];
-    snprintf(seed, sizeof seed, "okam-onvifd-nonce-%ld-%d", (long)time(NULL), (int)getpid());
+    snprintf(seed, sizeof seed, "cam-onvifd-nonce-%ld-%d", (long)time(NULL), (int)getpid());
     uint8_t d[16];
     md5((const uint8_t *)seed, strlen(seed), d);
     for (int i = 0; i < 16; i++)

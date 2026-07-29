@@ -3,8 +3,8 @@
  * because SPS/PPS are injected as separate single-NAL packets ahead of the
  * IDR slice, exactly like the Python reference does).
  */
-#ifndef OKAM_RTP_H264_H
-#define OKAM_RTP_H264_H
+#ifndef CAM_RTP_H264_H
+#define CAM_RTP_H264_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -30,4 +30,4 @@ static inline int rtp_nal_type(const uint8_t *nal, size_t len) {
     return len ? (nal[0] & 0x1F) : 0;
 }
 
-#endif /* OKAM_RTP_H264_H */
+#endif /* CAM_RTP_H264_H */
