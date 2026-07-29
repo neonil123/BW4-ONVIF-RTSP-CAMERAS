@@ -129,6 +129,12 @@ Name/Token wrapped around the one real H264 config), `Set/Add/Remove{Video,Audio
 `SetProfile`, `DeleteProfile`, `GetGuaranteedNumberOfVideoEncoderInstances` (`TotalNumber=1`),
 `GetNTP` (`FromDHCP=false`), `GetRelayOutputs` (empty — this device has none). `[verified]`
 
+**User management (accept-and-no-op)** — some NVRs run an "activation" step that enumerates or
+sets the admin user and fault out if it 500s. `GetUsers` advertises the single admin
+(`UserLevel=Administrator`); `CreateUsers`/`DeleteUsers`/`SetUser` return an empty 200 without
+changing the fixed credential; `GetDNS`/`GetDiscoveryMode` answer with sane stubs. This is what
+cleared the "camera reachable but says *activation* then fails" symptom. `[verified]`
+
 **Media access (auth-gated):** `GetStreamUri` → `rtsp://<cam-ip>:554/live`. Deliberately
 **token-agnostic** — it never reads `trt:ProfileToken`, so a newly-`CreateProfile`d token (or
 any token) still returns the one real URL. `[verified]`

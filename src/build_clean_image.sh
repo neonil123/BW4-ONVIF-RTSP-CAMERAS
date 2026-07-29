@@ -86,6 +86,18 @@ cat > "$W/sys/bin/vp_project" <<'EOS'
 #    (REQUIRED on an onboarded cam; stored pw != "888888" so create_web self-bails).
 #    On-disk /usr/bin/vp_project is NEVER modified -- this dd hits the live copy only.
 printf '\000\000\000\000' | dd of=/usr/bin/vp_project bs=1 seek=514932 count=4 conv=notrunc 2>/dev/null
+# 1b) FULL-RATE MIC: dev1/chn0 emits 25 fps of 16 kHz audio, but vp_project's own
+#     audio thread AND our mic_capture both call the *consuming* IMP_AI_GetFrame,
+#     so each gets every other frame (seq delta 2 = 12.5 fps = chunky audio after
+#     correct-pitch 2:1 decimation in the daemon). Neutralize the vendor consumer
+#     so mic_capture gets ALL frames (contiguous 16k -> continuous 8k PCMU):
+#       @0x4c3908 (file 801032): vendor fetch's `jal GetFrame` -> `li v0,-2` so it
+#         Polls dev1 (keeps pacing) but SKIPS GetFrame and returns -2, which its
+#         audio thread treats as "transient, keep looping" (stays alive; any other
+#         <0 would tear down the AI channel we read).
+#       @0x454c50 (file 347216): NOP the now-per-iteration error log (no tmpfs spam).
+printf '\376\377\002\044' | dd of=/usr/bin/vp_project bs=1 seek=801032 count=4 conv=notrunc 2>/dev/null
+printf '\000\000\000\000' | dd of=/usr/bin/vp_project bs=1 seek=347216 count=4 conv=notrunc 2>/dev/null
 # 2) OTA block: once vnet0 has an IP, keep multicast (WS-Discovery) + LAN /24,
 #    reject all other (non-LAN) routes so the cam can't reach the cloud/OTA.
 ( n=0

@@ -156,6 +156,45 @@ static const char SCOPES_TMPL[] =
     "  </tds:GetScopesResponse></SOAP-ENV:Body>\r\n"
     "</SOAP-ENV:Envelope>\r\n";
 
+/* User management -- needed so an NVR's "activation" step (GetUsers, then
+ * often SetUser/CreateUsers to set the admin password) completes instead of
+ * faulting. GetUsers advertises the single admin user; the mutating ops are
+ * accepted as no-ops (the real credential is fixed to onvif_user/onvif_pass). */
+static const char USERS_TMPL[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
+    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\"\r\n"
+    "                   xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\"\r\n"
+    "                   xmlns:tt=\"http://www.onvif.org/ver10/schema\">\r\n"
+    "  <SOAP-ENV:Body><tds:GetUsersResponse>\r\n"
+    "    <tds:User><tt:Username>%s</tt:Username><tt:UserLevel>Administrator</tt:UserLevel></tds:User>\r\n"
+    "  </tds:GetUsersResponse></SOAP-ENV:Body>\r\n"
+    "</SOAP-ENV:Envelope>\r\n";
+
+/* generic empty device-service ack: %s = op name (e.g. "CreateUsers") */
+static const char DEV_EMPTY_TMPL[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
+    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\"\r\n"
+    "                   xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\r\n"
+    "  <SOAP-ENV:Body><tds:%sResponse/></SOAP-ENV:Body>\r\n"
+    "</SOAP-ENV:Envelope>\r\n";
+
+static const char DNS_TMPL[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
+    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\"\r\n"
+    "                   xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\"\r\n"
+    "                   xmlns:tt=\"http://www.onvif.org/ver10/schema\">\r\n"
+    "  <SOAP-ENV:Body><tds:GetDNSResponse><tds:DNSInformation>\r\n"
+    "    <tt:FromDHCP>true</tt:FromDHCP>\r\n"
+    "  </tds:DNSInformation></tds:GetDNSResponse></SOAP-ENV:Body>\r\n"
+    "</SOAP-ENV:Envelope>\r\n";
+
+static const char DISCMODE_TMPL[] =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
+    "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\"\r\n"
+    "                   xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\">\r\n"
+    "  <SOAP-ENV:Body><tds:GetDiscoveryModeResponse><tds:DiscoveryMode>Discoverable</tds:DiscoveryMode></tds:GetDiscoveryModeResponse></SOAP-ENV:Body>\r\n"
+    "</SOAP-ENV:Envelope>\r\n";
+
 static const char PROFILES_TMPL[] =
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n"
     "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://www.w3.org/2003/05/soap-envelope\"\r\n"
@@ -1298,6 +1337,30 @@ static void dispatch(onvif_soap_t *s, int fd, const char *method, const char *re
     } else if (memmem_like(body, blen, "SetSynchronizationPoint")) {
         op = "SetSynchronizationPoint";
         n = snprintf(resp, sizeof resp, "%s", SYNC_POINT_TMPL);
+
+    } else if (memmem_like(body, blen, "CreateUsers")) {
+        op = "CreateUsers";
+        n = snprintf(resp, sizeof resp, DEV_EMPTY_TMPL, "CreateUsers");
+
+    } else if (memmem_like(body, blen, "DeleteUsers")) {
+        op = "DeleteUsers";
+        n = snprintf(resp, sizeof resp, DEV_EMPTY_TMPL, "DeleteUsers");
+
+    } else if (memmem_like(body, blen, "SetUser")) {
+        op = "SetUser";
+        n = snprintf(resp, sizeof resp, DEV_EMPTY_TMPL, "SetUser");
+
+    } else if (memmem_like(body, blen, "GetUsers")) {
+        op = "GetUsers";
+        n = snprintf(resp, sizeof resp, USERS_TMPL, s->cfg.onvif_user);
+
+    } else if (memmem_like(body, blen, "GetDNS")) {
+        op = "GetDNS";
+        n = snprintf(resp, sizeof resp, "%s", DNS_TMPL);
+
+    } else if (memmem_like(body, blen, "GetDiscoveryMode")) {
+        op = "GetDiscoveryMode";
+        n = snprintf(resp, sizeof resp, "%s", DISCMODE_TMPL);
 
     } else {
         extract_unknown_op(body, blen, unknown_op, sizeof unknown_op);

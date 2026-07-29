@@ -73,6 +73,7 @@ static void *worker(void *arg){
     const char *dest, *d;
     int sock, port, delay, ret;
     unsigned long frames=0, bytes=0, perr=0;
+    long g_last_seq=0, g_d1=0, g_d2=0, g_dx=0;
     (void)arg;
 
     d = getenv("MIC_DELAY"); delay = (d && *d) ? (int)atoi(d) : MIC_DELAY_DEFAULT;
@@ -98,7 +99,14 @@ static void *worker(void *arg){
             sret = sendto(sock, f.virAddr, (unsigned long)f.len, 0, sa, 16);
             frames++; bytes += (unsigned long)f.len;
             if(frames<=3){ logkv("sendto ret=",(long)sret,1); if(sret<0) logkv("  errno=",(long)*__errno_location(),1); }
-            if(frames%250==0) logkv("frames sent=",(long)frames,1);
+            /* SEQ DIAGNOSTIC: log seq of first 40 frames + delta histogram.
+             * delta==2 => a co-consumer (vp_project's own dev1 loop) steals every
+             * other frame (real rate 25fps, split); delta==1 => dev1 native 12.5. */
+            if(frames<=40){ logkv("seq=",(long)f.seq,1); }
+            { long d = (long)f.seq - g_last_seq; g_last_seq=(long)f.seq;
+              if(frames>1){ if(d==1)g_d1++; else if(d==2)g_d2++; else g_dx++; } }
+            if(frames%250==0){ logkv("frames sent=",(long)frames,1);
+              logkv("  seqdelta d1=",g_d1,1); logkv("  d2=",g_d2,1); logkv("  dOther=",g_dx,1); }
         }
         Rel(AI_DEV_ID, AI_CHN_ID, &f);
     }

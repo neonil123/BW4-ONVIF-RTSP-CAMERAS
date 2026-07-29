@@ -14,24 +14,26 @@ talk-back wall is.
 
 ## 1. Microphone → RTSP — done ✅
 
-> ### ⚠️ Quality ceiling: it's the vendor's 8 kHz "talkback" channel, and it sounds like it
-> The mic audio we capture is **`IMP AI dev1/ch0` — the vendor's two-way / talkback path**, not the
-> high-fidelity channel the phone app plays. Quantitative DSP analysis of the captured stream (clean
-> synth reference for comparison) found:
-> - **Muffled = a hard telephone brick-wall at ~3.4 kHz** — 99% of energy rolls off by ~3.2 kHz;
->   the entire 4–8 kHz consonant/sibilance band is physically absent (8 kHz sampling). ~−30 dB there.
-> - **"Robotic/watery" = the channel's echo-cancel / noise-suppression DSP** — **+4 dB of
->   "musical-noise" floor flicker** vs a clean reference, **~44 dB of gating/ducking**, and a broad
->   1.5–2.25 kHz notch. This is aggressive AEC/NS meant for phone-style talk, not fidelity.
-> - **Not** a bug, **not** a rate/pitch error (voiced f0 measured 167–258 Hz, normal), **not** µ-law
->   (~36 dB SNR at these levels), and **not** the player (the degradation is already in the raw RTP
->   stream; VLC only adds gain). The camera hardware is fine — the **app sounds good because it uses a
->   different, cleaner ~16 kHz channel** without this DSP.
+> ### ✅ "Robotic/chunky" mic — root-caused with an acoustic tone-loop and FIXED
+> An earlier note here blamed a "3.4 kHz brick-wall / native 8 kHz channel." **That was wrong.** A
+> controlled acoustic loop (play calibrated tones + sweeps at the mic, capture the RTSP audio, measure)
+> found **two** real, camera-side defects — both now fixed:
+> 1. **Pitch was exactly one octave low** (f_out = f_in/2 on every tone + the sweep, duration
+>    preserved). The mic content is genuinely **16 kHz** (`insmod audio.ko … samplerate=16000`), but the
+>    daemon served the samples as 8 kHz → octave-down "Transformers" voice. **Fix:** the daemon now
+>    **2:1 averaging-downsamples 16k→8k** before μ-law (`audio_source.c`), restoring correct pitch.
+> 2. **"Chunky"/gappy = a frame SPLIT, not a bandwidth limit.** Instrumenting the shim to log
+>    `IMPAudioFrame.seq` showed we received **every other frame** (seq delta 2). `dev1/ch0` emits the
+>    full **25 fps** of 16 kHz, but `vp_project`'s own audio thread *and* our shim both call the
+>    *consuming* `IMP_AI_GetFrame`, so each got half (12.5 fps ⇒ ~50% of the timeline missing). **Fix:**
+>    two byte-patches to the RAM copy of `vp_project` neutralize the vendor's competing consumer so the
+>    shim is the **sole consumer** → all 25 fps → contiguous 16 kHz (see *Full-rate patch* below).
 >
-> **To get app-quality audio (future work):** capture the app's **16 kHz main audio channel** instead
-> of dev1 (best — fixes bandwidth *and* the DSP at once), or reconfigure this path to 16 kHz + disable
-> `IMP_AI` AEC/NS/AGC and carry it as L16/Opus instead of G.711. If constrained to 8 kHz G.711, just
-> disabling NS/AEC removes most of the "robotic" character while staying phone-bandwidth.
+> **Result (verified live):** shim seq delta **1**, daemon audio **25.0/s** steady, RTSP delivers
+> real-time continuous audio (8.08 s captured in an 8 s window, was 4.3 s), **correct pitch**, stable.
+> Residual: `dev1` still runs the vendor's NS/AGC/AEC DSP and gates to silence in a quiet room — that's
+> cosmetic, not the chunking. For studio fidelity one could later disable `IMP_AI` NS/AEC or carry the
+> raw 16 kHz as L16/Opus instead of narrow-band G.711.
 
 ### The dead end we started at (`:81` audio CGI)
 The first idea was to pull audio the same way video is pulled — from the app's local
@@ -49,12 +51,29 @@ Audio is captured by **our own** code on the device, not pulled from the app:
   vendor `PollingFrame`/`GetFrame`/`ReleaseFrame` wrappers. It never re-inits or reconfigures
   the device, so it does **not** contend with `vp_project`. It ships S16LE PCM as UDP datagrams
   to `127.0.0.1:5599`.
-- **Native mic format is 8 kHz / 16-bit / mono** (verified live — *not* 16 kHz as an early note
-  guessed; that wrong assumption caused a 2× speed / 25 pps bug before it was fixed).
-- **`okam_onvifd`** receives `:5599`, μ-law-encodes each sample **with no resampling** (source
-  is already 8 kHz), and serves it as a **second RTP track** — `PCMU/8000`, payload type 0 —
-  advertised in the RTSP SDP as `m=audio ... a=rtpmap:0 PCMU/8000 / a=control:track1`. Timestamp
-  advances at 8 kHz. The live stream carries synchronized A/V at ~50 packets/s.
+- **Native mic format is 16 kHz / 16-bit / mono** (`samplerate=16000`; 640 samples = 40 ms per
+  1280-byte frame, 25 fps). An earlier note guessed 8 kHz — wrong; that's what produced the
+  octave-down pitch until the daemon downsample was added.
+- **`okam_onvifd`** receives `:5599`, **2:1 averaging-downsamples 16k→8k** (anti-alias low-pass +
+  decimate, carrying one sample across datagram boundaries), μ-law-encodes, and serves it as a
+  **second RTP track** — `PCMU/8000`, payload type 0 — advertised in the RTSP SDP as
+  `m=audio ... a=rtpmap:0 PCMU/8000 / a=control:track1`. Timestamp advances at 8 kHz. The live
+  stream carries synchronized A/V at ~50 packets/s.
+
+### Full-rate patch — making the shim the sole `dev1` consumer
+`IMP_AI_GetFrame` *dequeues*; with two callers (the vendor audio thread + our shim) each gets every
+other frame. The wrapper patches the **RAM copy** of `/usr/bin/vp_project` (on-disk binary untouched,
+same mechanism as the `:81` onboarding NOP) at two sites found by disassembly (statically-linked
+libimp; file offset = vaddr − 0x400000):
+- **`0x4c3908` (file 801032)** — the vendor fetch's `jal IMP_AI_GetFrame` → `li v0,-2`. The fetch
+  still **Polls** `dev1` (keeps pacing) but **skips GetFrame and returns −2**, a value its own audio
+  thread (loop @`0x454b08`) treats as "transient, keep looping." Any other negative return would make
+  that thread exit and tear down the AI channel we depend on — so **−2 specifically** keeps it alive
+  and idle. Net: our shim becomes the sole consumer → all 25 fps.
+- **`0x454c50` (file 347216)** — NOP the now-per-iteration error-log call so it can't spam tmpfs 24/7.
+
+Cost: the vendor audio thread now frame-paces (~25/s) doing nothing; CPU stays within headroom and the
+mic delivers a steady 25.0/s with no drops.
 
 ### The contention question — answered
 The whole project depends on `vp_project` staying alive (it holds the power-gate keepalive). The
@@ -145,6 +164,7 @@ in [FLASHING.md](FLASHING.md#the-thingino-full-firmware-path)).
 | Native `IMP_AI` mic capture (dev 1, 8 kHz, pure-read shim) | **done** ✅ |
 | Mic contention with running `vp_project` | **no `EBUSY`** — pure-read coexists ✅ |
 | Mic audio in RTSP/ONVIF (G.711 μ-law, `PCMU/8000`, track1) | **shipped** ✅ |
+| Mic quality — correct pitch (2:1 downsample) + continuous full-rate (sole-consumer patch) | **fixed** ✅ |
 | Talk-back software pipeline (`:5601`→sink→`:5600`→AO→DAC) | **built & correct** ✅ |
 | Talk-back audible at the speaker | **NO** — codec SPK output stage not enabled ⚠️ **open** |
 | Next lead | fresh `IMP_AO_SetPubAttr` init (don't piggyback vp_project) |

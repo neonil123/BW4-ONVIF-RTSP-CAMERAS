@@ -156,11 +156,13 @@ static void *reader_loop(void *arg) {
         LOGW("audio: mic UDP receiver disabled (bind failed) -- serving video only");
         return NULL;
     }
-    LOGI("audio: listening for mic PCM on %s:%d (S16LE/8k mono -> PCMU/8k, no resample)", src->host, src->port);
+    LOGI("audio: listening for mic PCM on %s:%d (S16LE/16k mono -> 2:1 downsample -> PCMU/8k)", src->host, src->port);
 
     uint8_t buf[4096];
     uint8_t acc[AUD_CHUNK_BYTES];
     int acc_len = 0;
+    int  have_prev = 0;   /* carry one S16 sample across datagram boundaries */
+    int  prev_s = 0;      /* so 2:1 decimation pairs are never split */
     long stat_frames = 0;
     double stat_start = monotonic_seconds();
     const double STATS_EVERY = 10.0;
@@ -181,20 +183,28 @@ static void *reader_loop(void *arg) {
         pthread_mutex_unlock(&src->rx_mu);
         stat_frames++;
 
-        /* The IMP AI channel (dev1) delivers S16LE mono at *8 kHz* already
-         * (640 samples / 1280-byte frame, ~12.5 frames/s = 8000 samples/s,
-         * verified by measuring the mic send rate vs the daemon recv rate --
-         * both a steady 12.5/s with no loss). /proc/jz/audio reports the
-         * codec's nominal 16 kHz, but the channel vp_project actually reads
-         * for its two-way-audio feature is 8 kHz G.711-grade. So do NOT
-         * resample -- mu-law-encode each sample directly (1 byte/sample).
-         * 640 samples -> 640 bytes -> 4x160-byte (20 ms) chunks -> 50 pkt/s,
-         * which is real-time PCMU/8000. Any datagram size is tolerated; an
-         * odd trailing byte is ignored. */
+        /* The IMP AI channel (dev1) delivers S16LE mono whose CONTENT is 16 kHz
+         * (acoustic tone-loop measurement: served-as-8k audio came out exactly
+         * one octave low, f_out=f_in/2, duration preserved -- the classic
+         * 16k-samples-played-at-8k signature). /proc/jz/audio's nominal 16 kHz
+         * is the truth; the earlier "12.5 f/s = 8k" reading was a coarse
+         * log-tick artifact. So DOWNSAMPLE 2:1 (average adjacent pairs as a
+         * cheap anti-alias low-pass, then decimate) to get real-pitch 8 kHz,
+         * and mu-law-encode. 16000 samp/s in -> 8000 samp/s out = real-time
+         * PCMU/8000, correct pitch, duration preserved, no ring overflow.
+         * A single sample is carried across datagram boundaries so pairs are
+         * never split; odd trailing bytes are ignored. */
         long in_samples = n / 2;
         for (long k = 0; k < in_samples; k++) {
             int s = (int16_t)((uint16_t)buf[2 * k] | ((uint16_t)buf[2 * k + 1] << 8));
-            acc[acc_len++] = mulaw_encode(s);
+            if (!have_prev) {
+                prev_s = s;
+                have_prev = 1;
+                continue;
+            }
+            int avg = (prev_s + s) / 2;   /* 2:1 low-pass + decimate */
+            have_prev = 0;
+            acc[acc_len++] = mulaw_encode(avg);
             if (acc_len == AUD_CHUNK_BYTES) {
                 fanout(src, acc);
                 acc_len = 0;
