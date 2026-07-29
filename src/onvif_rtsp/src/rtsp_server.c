@@ -38,6 +38,11 @@ typedef struct {
     int  has_udp;
     struct sockaddr_in udp_addr;
     int  udp_sock;
+    /* RTCP Sender Report state (for A/V sync). rtcp_addr is the client's RTCP
+     * port for UDP transport; for interleaved TCP the SR rides rtcp_ch. */
+    int  has_rtcp_udp;
+    struct sockaddr_in rtcp_addr;
+    uint32_t sr_pkts, sr_octets, last_rtp_ts;
 } rtsp_track_t;
 
 typedef struct rtsp_session {
@@ -102,9 +107,64 @@ static void session_send_rtp(rtsp_session_t *sess, int tk, const uint8_t *pkt, s
  * (sess,track,pkt,len) so rtp_h264.c/rtp_pcmu.c stay transport-agnostic. */
 typedef struct { rtsp_session_t *sess; int track; } send_ctx_t;
 
+static uint32_t rd_be32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+}
+static void wr_be32(uint8_t *p, uint32_t v) {
+    p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t)v;
+}
+
 static void rtp_cb_bridge(const uint8_t *pkt, size_t len, void *ctx) {
     send_ctx_t *sc = (send_ctx_t *)ctx;
     session_send_rtp(sc->sess, sc->track, pkt, len);
+    /* Track per-stream counters + the last RTP timestamp sent, for RTCP SR.
+     * Same thread builds the SR, so no locking needed on these. */
+    rtsp_track_t *t = &sc->sess->track[sc->track];
+    t->sr_pkts++;
+    if (len > 12) t->sr_octets += (uint32_t)(len - 12);
+    if (len >= 8) t->last_rtp_ts = rd_be32(pkt + 4);
+}
+
+/* Send an RTCP Sender Report on a track's RTCP path (interleaved rtcp_ch over
+ * TCP, or the client's RTCP UDP port). The SR maps this stream's current RTP
+ * timestamp to an NTP wall-clock instant; with an SR on BOTH video and audio,
+ * a receiver aligns the two to one clock instead of resampling the audio to
+ * fit the video -- which is what made A/V-syncing players (VLC, Synology NVR)
+ * render the mic slightly slow / robotic. */
+static void session_send_rtcp(rtsp_session_t *sess, int tk, const uint8_t *pkt, size_t len) {
+    rtsp_track_t *t = &sess->track[tk];
+    if (t->has_interleaved && sess->send_mu) {
+        uint8_t hdr[4];
+        hdr[0] = '$';
+        hdr[1] = (uint8_t)t->rtcp_ch;
+        hdr[2] = (uint8_t)((len >> 8) & 0xFF);
+        hdr[3] = (uint8_t)(len & 0xFF);
+        pthread_mutex_lock(sess->send_mu);
+        if (write_all(sess->conn_fd, hdr, 4) == 0)
+            write_all(sess->conn_fd, pkt, len);
+        pthread_mutex_unlock(sess->send_mu);
+    } else if (t->has_rtcp_udp && t->udp_sock >= 0) {
+        sendto(t->udp_sock, pkt, len, 0, (struct sockaddr *)&t->rtcp_addr, sizeof t->rtcp_addr);
+    }
+}
+
+static void send_sender_report(rtsp_session_t *sess, int tk, uint32_t ssrc) {
+    rtsp_track_t *t = &sess->track[tk];
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    uint32_t ntp_sec  = (uint32_t)((uint64_t)ts.tv_sec + 2208988800ULL); /* 1900 epoch */
+    uint32_t ntp_frac = (uint32_t)(((double)ts.tv_nsec / 1e9) * 4294967296.0);
+    uint8_t b[28];
+    b[0] = 0x80;  /* V=2, P=0, RC=0 */
+    b[1] = 200;   /* PT = SR */
+    b[2] = 0; b[3] = 6; /* length = 6 (28 bytes) */
+    wr_be32(b + 4,  ssrc);
+    wr_be32(b + 8,  ntp_sec);
+    wr_be32(b + 12, ntp_frac);
+    wr_be32(b + 16, t->last_rtp_ts);
+    wr_be32(b + 20, t->sr_pkts);
+    wr_be32(b + 24, t->sr_octets);
+    session_send_rtcp(sess, tk, b, sizeof b);
 }
 
 /* ------------------------------------------------------------------- replies */
@@ -213,8 +273,14 @@ static void *stream_thread(void *arg_) {
     double start = monotonic_seconds();
     int have_base = 0;
     uint32_t base_ts = 0;
+    double next_sr = monotonic_seconds() + 0.2; /* first SR shortly after PLAY */
 
     while (!sess->stop) {
+        double now_sr = monotonic_seconds();
+        if (now_sr >= next_sr && sess->track[TRACK_VIDEO].sr_pkts > 0) {
+            send_sender_report(sess, TRACK_VIDEO, OKAM_SSRC);
+            next_sr = now_sr + 1.0; /* ~1 s cadence keeps A/V sync tight */
+        }
         au_buf_t *item = cam_sub_get(sub, 0.5);
         if (!item)
             continue;
@@ -275,8 +341,14 @@ static void *audio_stream_thread(void *arg_) {
     uint16_t seq = 0;
     uint32_t ts = 0;
     uint8_t chunk[AUD_CHUNK_BYTES];
+    double next_sr = monotonic_seconds() + 0.2;
 
     while (!sess->stop) {
+        double now_sr = monotonic_seconds();
+        if (now_sr >= next_sr && sess->track[TRACK_AUDIO].sr_pkts > 0) {
+            send_sender_report(sess, TRACK_AUDIO, OKAM_AUDIO_SSRC);
+            next_sr = now_sr + 1.0;
+        }
         if (!audio_sub_get(sub, 0.5, chunk))
             continue; /* idle: no mic audio right now */
         rtp_pcmu_packetize(chunk, sizeof chunk, &seq, &ts, OKAM_AUDIO_SSRC,
@@ -346,6 +418,9 @@ static void dispatch(conn_ctx_t *c, rtsp_server_t *rs, const char *method, const
             tr->has_udp = 1;
             tr->udp_addr = peer;
             tr->udp_addr.sin_port = htons((uint16_t)a);
+            tr->rtcp_addr = peer;
+            tr->rtcp_addr.sin_port = htons((uint16_t)(b ? b : a + 1));
+            tr->has_rtcp_udp = 1;
             tr->udp_sock = socket(AF_INET, SOCK_DGRAM, 0);
             struct sockaddr_in bindaddr;
             memset(&bindaddr, 0, sizeof bindaddr);
