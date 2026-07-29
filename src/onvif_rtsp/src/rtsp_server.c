@@ -47,6 +47,7 @@ typedef struct rtsp_session {
     volatile int stop;
     pthread_t vthread;           /* video stream thread */
     pthread_t athread;           /* audio stream thread (started only if audio SETUP) */
+    int  has_vthread;
     int  has_athread;
     int conn_fd;                 /* valid only while the owning connection is alive */
     pthread_mutex_t *send_mu;    /* the owning connection's write lock (TCP-interleaved sends) */
@@ -373,14 +374,21 @@ static void dispatch(conn_ctx_t *c, rtsp_server_t *rs, const char *method, const
             s->playing = 1;
             stream_arg_t *a = (stream_arg_t *)malloc(sizeof *a);
             a->sess = s; a->rs = rs;
-            pthread_create(&s->vthread, NULL, stream_thread, a);
-            pthread_detach(s->vthread);
+            /* NOT detached: handle_conn joins these on teardown before freeing
+             * the session/connection, so a thread can never dereference freed
+             * session state or lock the destroyed send_mu (was a UAF crash on
+             * abrupt client disconnect during PLAY). */
+            if (pthread_create(&s->vthread, NULL, stream_thread, a) == 0)
+                s->has_vthread = 1;
+            else
+                free(a);
             if (audio_on) {
                 stream_arg_t *aa = (stream_arg_t *)malloc(sizeof *aa);
                 aa->sess = s; aa->rs = rs;
-                pthread_create(&s->athread, NULL, audio_stream_thread, aa);
-                pthread_detach(s->athread);
-                s->has_athread = 1;
+                if (pthread_create(&s->athread, NULL, audio_stream_thread, aa) == 0)
+                    s->has_athread = 1;
+                else
+                    free(aa);
             }
         }
 
@@ -492,18 +500,20 @@ static void *handle_conn(void *arg_) {
 
     if (session) {
         session->stop = 1;
+        /* Join the streaming threads BEFORE freeing the session or the
+         * connection: they reference session state and lock sess->send_mu
+         * (== &c->send_mu), so they must be fully stopped before any of that
+         * is destroyed. Each thread notices stop on its next <=0.5s poll, so
+         * this returns promptly. This closes the use-after-free that crashed
+         * the daemon when a client dropped mid-PLAY. */
+        if (session->has_vthread) pthread_join(session->vthread, NULL);
+        if (session->has_athread) pthread_join(session->athread, NULL);
         for (int i = 0; i < N_TRACKS; i++) {
             if (session->track[i].has_udp && session->track[i].udp_sock >= 0) {
                 close(session->track[i].udp_sock);
                 session->track[i].udp_sock = -1;
             }
         }
-        /* The streaming thread (if any) holds no reference into `session`
-         * beyond what it needs to notice `stop` and unsubscribe; it is
-         * detached, so we don't join it here. Its last use of conn_fd/send_mu
-         * happens before it observes stop==1 on its next 0.5s poll, and we
-         * are about to close(c->fd) -- a write racing that close can at worst
-         * fail harmlessly (EBADF/EPIPE), never corrupt another connection. */
         session_free(session);
     }
     close(c->fd);

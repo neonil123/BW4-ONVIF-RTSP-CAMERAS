@@ -112,13 +112,15 @@ int audio_sub_get(audio_sub_t *sub, double timeout_sec, uint8_t *out) {
 }
 
 static void fanout(audio_source_t *src, const uint8_t *chunk) {
+    /* Push while holding subs_mu so a concurrent audio_source_unsubscribe()
+     * cannot remove+free a subscriber between us reading the array and pushing
+     * to it (that was a use-after-free). sub_push never blocks (drop-oldest, no
+     * cond wait), and it takes only the per-sub lock, so holding subs_mu across
+     * the loop is cheap and deadlock-free (lock order is always subs_mu -> sub->mu). */
     pthread_mutex_lock(&src->subs_mu);
-    int n = src->n_subs;
-    audio_sub_t *targets[AUD_MAX_SUBS];
-    memcpy(targets, src->subs, (size_t)n * sizeof(audio_sub_t *));
+    for (int i = 0; i < src->n_subs; i++)
+        sub_push(src->subs[i], chunk);
     pthread_mutex_unlock(&src->subs_mu);
-    for (int i = 0; i < n; i++)
-        sub_push(targets[i], chunk);
 }
 
 /* ------------------------------------------------------------- reader thread */
