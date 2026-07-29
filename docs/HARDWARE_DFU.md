@@ -31,7 +31,8 @@ It is not a casual step and it does require a steady hand.
 - **Plastic pry tool / spatula** to peel the silicone cover and split the enclosure.
 - **Fine tweezers or a thin jumper wire** to bridge the two flash pins.
 - **USB-C cable** (any that carries power; a data cable is fine).
-- A **Windows PC** with this repo's flasher tools (`tools/thingino-dfu`, `tools/dfu-util`).
+- A **Windows PC** with this repo's flasher tools (`tools/thingino-dfu`, `tools/dfu-util`)
+  **and the USB driver installed** (one-time per PC — see *Install the USB driver* below).
 
 ---
 
@@ -82,9 +83,21 @@ to its **USB BootROM**. The PC then enumerates a new device with **`VID_A108&PID
 
 ---
 
+## Install the USB driver (one-time per PC)
+
+Windows needs a **WinUSB / libusb** driver bound to the BootROM device or `dfu-util` can't
+claim it (you'll see `LIBUSB_ERROR_NOT_SUPPORTED` / "no DFU capable device"). Do this **once**:
+
+1. Trigger the short + power so the device enumerates (Device Manager shows an unknown
+   **`USB VID_A108 & PID_C309`** device).
+2. Run **[Zadig](https://zadig.akeo.ie)** → *Options ▸ List All Devices* → select the
+   `a108:c309` device → choose **WinUSB** → **Install Driver**.
+3. That's it — future flashes on this PC just work. (The U-Boot DFU stage re-enumerates with the
+   same `a108:c309` ID, so the one driver covers both stages.)
+
 ## Flash (see FLASHING.md for the exact commands)
 
-Once `a108:c309` enumerates, hand off to the PC-side flasher documented in
+Once `a108:c309` enumerates (and the driver above is installed), hand off to the PC-side flasher documented in
 [FLASHING.md → *Last resort — full DFU restore*](FLASHING.md#last-resort--full-dfu-restore).
 In short: `thingino-dfu` **bootstraps** the BootROM (`-b --wait --cpu t23zn`), then
 **`dfu-util`** does the actual write/readback (`dfu-util -a flash -D/-U …`). Keep those exact
