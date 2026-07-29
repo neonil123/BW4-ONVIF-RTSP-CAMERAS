@@ -5,7 +5,7 @@ production deploy writes **only `mtd4`** with `flashcp`. DFU is the last-resort 
 channel and has one hard rule.
 
 > ### Read this first (public image)
-> - The image in **`firmware/mtd4_integrated.bin`** (md5 `cedff4da9af8106f0e2fca94cc3cb3e5`)
+> - The image in **`firmware/mtd4_integrated.bin`** (md5 `154ea4fbef9a515c56934f6d39a66f66`)
 >   is built with **`devpw=CHANGE_ME`**. Flashed as-is it will boot and expose ONVIF, but the
 >   `:81` handshake fails so **there is no video** until you supply your unit's credentials.
 > - **Make a working image for your camera:** read your unit's device password
@@ -61,12 +61,12 @@ Pre-flight md5 gates (abort if any mismatches — do **not** DFU to "fix" the SD
 
 ```sh
 mount | grep sda0                                   # SD must be at /mnt/sda0
-md5sum /mnt/sda0/mtd4_integrated.bin                # MUST equal cedff4da9af8106f0e2fca94cc3cb3e5
+md5sum /mnt/sda0/mtd4_integrated.bin                # MUST equal 154ea4fbef9a515c56934f6d39a66f66
 md5sum /mnt/sda0/mtd4_okabweb_v8.bin                # MUST equal fb1266aa06d4faa7d1efa46c844d304f
 cat /dev/mtd4 > /mnt/sda0/mtd4_backup_live.bin && md5sum /mnt/sda0/mtd4_backup_live.bin  # extra revert
 ```
 
-> The md5 to verify is **`cedff4da9af8106f0e2fca94cc3cb3e5`** — the current
+> The md5 to verify is **`154ea4fbef9a515c56934f6d39a66f66`** — the current
 > `mtd4_integrated.bin`, which carries the four shims **plus `okam_onvifd`** and auto-starts
 > the daemon on boot. Two older values are **stale**: `0b3273fd…` was the 4-shim build before
 > the daemon was baked in, and the integrated `README.md` / `BENCH_FLASH_INTEGRATED.md`
@@ -117,7 +117,7 @@ python tools/tftp_server.py                 # serves builds/exfil/ on UDP 6900 (
 # device (serial root shell), <PC_IP> = the serving host:
 cd /tmp
 tftp -g -r mtd4_integrated.bin -l /tmp/mtd4_integrated.bin <PC_IP> 6900
-md5sum /tmp/mtd4_integrated.bin             # MUST equal cedff4da9af8106f0e2fca94cc3cb3e5
+md5sum /tmp/mtd4_integrated.bin             # MUST equal 154ea4fbef9a515c56934f6d39a66f66
 kill -9 $(pidof vp_project) 2>/dev/null ; sleep 2
 umount /system 2>/dev/null
 flashcp -v /tmp/mtd4_integrated.bin /dev/mtd4

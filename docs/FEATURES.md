@@ -3,9 +3,10 @@
 > **Repo-path & count note.** This page was written against the original working tree, so it
 > references paths like `builds/…` and `tools/…` and says "four shims". In **this** repo the shim
 > **sources** live under [`src/shims/`](../src/shims) and the **prebuilt binaries** under
-> [`bin/`](../bin). The shipped overlay actually carries **six** shims: the four documented below
-> **plus two audio shims** — `mic_capture.so` (native `IMP_AI` mic reader) and `speaker_feed.so`
-> (talk-back), both covered in **[AUDIO.md](AUDIO.md)**. Treat the md5s below as illustrative;
+> [`bin/`](../bin). The shipped overlay carries **five** shims: the four documented below **plus**
+> `mic_capture.so` (native `IMP_AI` mic reader, see **[AUDIO.md](AUDIO.md)**). The talk-back shim
+> `speaker_feed.so` is **not** in the default image — it lives on the `talkback-experimental`
+> branch because it corrupts the mic (see [AUDIO.md](AUDIO.md)). Treat the md5s below as illustrative;
 > the authoritative firmware md5 is in [`firmware/mtd4_integrated.bin.md5`](../firmware).
 
 The deployable is a set of **`LD_PRELOAD` shims** that augment the stock `vp_project` **without
@@ -33,7 +34,7 @@ per-feature notes and [the contradictions list in the project report].
 | battery_osd | `builds/features/battery_osd/battery_osd.so` | `119900999bf56f65b1c652a79a0e2a8b` | verified live (display) |
 
 The integrated deployable that carries all four shims **plus `okam_onvifd`**:
-`builds/features/integrated/mtd4_integrated.bin`, md5 **`cedff4da9af8106f0e2fca94cc3cb3e5`**
+`builds/features/integrated/mtd4_integrated.bin`, md5 **`154ea4fbef9a515c56934f6d39a66f66`**
 (recomputed from the current file). Two older values float around and are **stale**: the
 integrated `README.md` cites `6cd7c13a…` (predates the final battery_osd/pir_sleep rebuilds)
 and earlier `docs/` cited `0b3273fd…` (the 4-shim build *before* the daemon was baked in). The
@@ -237,7 +238,7 @@ accepted). This is what real Profile-S cameras do and what Synology needs. Full 
 
 ## Integrated image — four shims + the daemon
 
-`builds/features/integrated/mtd4_integrated.bin` (md5 **`cedff4da9af8106f0e2fca94cc3cb3e5`**)
+`builds/features/integrated/mtd4_integrated.bin` (md5 **`154ea4fbef9a515c56934f6d39a66f66`**)
 is a single `/system` XZ-squashfs with one wrapper, all four `.so` in one `LD_PRELOAD`, and
 `okam_onvifd` (+ its conf) that the wrapper auto-starts once `:81` is up. See
 [ARCHITECTURE.md](ARCHITECTURE.md) §3 for the wrapper and chain-order dependency, and

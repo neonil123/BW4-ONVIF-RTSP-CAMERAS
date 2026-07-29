@@ -35,7 +35,7 @@ Legend: ✅ verified live on the camera · 🟡 built & host-verified, needs a b
 | **`battery_osd.so`** — real battery % on the OSD | ✅ | live voltage read; label is letter-free (partial OSD font) |
 | **`wifi_sd.so`** — SD-card Wi-Fi onboarding | ✅ switch / 🟡 first-join | AP-switch verified live; clean first-join needs a fresh unit |
 | **`pir_sleep.so`** — low-battery PIR-wake sleep | 🟡 | enable/addresses re-proven; sleep branch needs battery <50% at bench |
-| **Talk-back → speaker** (NVR → camera audio out) | ⚠️ **open** | full software path works to the DAC (proven by loopback), but the codec's speaker output stage never enables — [AUDIO.md](docs/AUDIO.md#2-speaker--talk-back--not-audible--the-open-problem-️) |
+| **Talk-back → speaker** (NVR → camera audio out) | ⚠️ **open / experimental** | on the [`talkback-experimental`](../../tree/talkback-experimental) branch, **not** in the default image: the software path reaches the DAC (loopback-proven) but the speaker stage never enables, **and** the AO calls corrupt the shared codec so the **mic goes robotic** — [AUDIO.md](docs/AUDIO.md#2-speaker--talk-back--not-audible--the-open-problem-️) |
 | **`:81` audio CGI** as an audio source | ❌ | vendor handler builds the frame container but never calls `IMP_AI` |
 | **Full Thingino firmware** (Track B) | ⚠️ blocked | flashes & boots, but AIC8800**U** Wi-Fi never enumerates — [FLASHING.md](docs/FLASHING.md#the-thingino-full-firmware-path) |
 
@@ -76,8 +76,9 @@ adds a thin layer:
 3. **`okam_onvifd`** — a static MIPS C daemon on the camera — reads that local stream, re-frames it
    to **RTSP `:554`** and serves **ONVIF `:80`** (SOAP + WS-Discovery + snapshot). It also mixes in
    a live **G.711 audio track** fed by `mic_capture.so` (a pure `IMP_AI` reader).
-4. A handful more `LD_PRELOAD` shims add battery-OSD, SD Wi-Fi onboarding, PIR sleep, and the
-   (in-progress) talk-back path.
+4. A handful more `LD_PRELOAD` shims add battery-OSD, SD Wi-Fi onboarding, and PIR sleep. (The
+   experimental talk-back shim lives on the `talkback-experimental` branch and is **kept out of
+   the default image** — it corrupts the mic; see [AUDIO.md](docs/AUDIO.md).)
 
 Everything is packed into one XZ-squashfs `mtd4` overlay. Deep dive: [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -110,7 +111,7 @@ After reboot the camera comes up with Wi-Fi, `:81`, RTSP `:554`, ONVIF `:80`, th
 the OSD/audio features live. Point your NVR at `rtsp://<cam-ip>:554/live` (ONVIF user/pass default
 `admin`/`admin`). Full procedure, the SD-free TFTP method, and recovery: [FLASHING.md](docs/FLASHING.md).
 
-> The prebuilt **`firmware/mtd4_integrated.bin`** (md5 `cedff4da9af8106f0e2fca94cc3cb3e5`) is
+> The prebuilt **`firmware/mtd4_integrated.bin`** (md5 `154ea4fbef9a515c56934f6d39a66f66`) is
 > committed with `devpw=CHANGE_ME` and **no vendor voice-prompt media** — it's the reference
 > structure and boots, but produces **no video** until you rebuild with your creds (step 2). To
 > keep the camera's spoken voice prompts, build from your own stock `/system` dump instead — see
@@ -122,10 +123,10 @@ the OSD/audio features live. Point your NVR at `rtsp://<cam-ip>:554/live` (ONVIF
 
 ```
 firmware/  mtd4_integrated.bin        clean flashable overlay (CHANGE_ME, no vendor media) + .md5
-bin/       okam_onvifd, *.so          our prebuilt MIPS binaries (daemon + 6 LD_PRELOAD shims)
+bin/       okam_onvifd, *.so          our prebuilt MIPS binaries (daemon + 5 LD_PRELOAD shims)
 src/
   onvif_rtsp/src/                      the on-device ONVIF/RTSP/audio daemon (C)
-  shims/                               okabweb, wifi_sd, pir_sleep, battery_osd, mic_capture, speaker_feed
+  shims/                               okabweb, wifi_sd, pir_sleep, battery_osd, mic_capture
   build_clean_image.sh                 build the public-safe overlay (from scratch, your creds via env)
   build_integrated.sh                  build from YOUR camera's stock /system (keeps voice prompts)
 docs/

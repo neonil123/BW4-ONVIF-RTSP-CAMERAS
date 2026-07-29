@@ -26,7 +26,11 @@ WIFI=$F/wifi_sd/wifi_sd.so
 PIR=$F/pir_sleep/pir_sleep.so
 ONVIFD=$F/onvif_rtsp/okam_onvifd
 MICCAP=$F/audio/mic_capture/mic_capture.so
-SPKFEED=$F/audio/speaker_feed/speaker_feed.so
+# NOTE: speaker_feed.so (talk-back) is intentionally NOT built into this image.
+# It manipulates the shared jz-inner-codec (IMP_AO SetPubAttr/Enable) and was
+# found to corrupt the 8 kHz microphone into a robotic/metallic signal. The
+# talk-back work lives on the `talkback-experimental` branch until the codec
+# speaker-enable is solved. See docs/AUDIO.md.
 # Per-unit creds. Defaults to placeholders so the committed/public image carries
 # NO secret. For a WORKING image on YOUR camera, pass your unit's values:
 #   DEVPW=xxxxxxxx VUID=VQxxxxxxxXXXX bash build_clean_image.sh my_image.bin
@@ -35,7 +39,7 @@ SPKFEED=$F/audio/speaker_feed/speaker_feed.so
 DEVPW=${DEVPW:-CHANGE_ME}
 VUID=${VUID:-CHANGE_ME}
 
-for f in "$OKABWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP" "$SPKFEED"; do
+for f in "$OKABWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
   [ -f "$f" ] || { echo "ERROR missing $f"; exit 1; }
 done
 
@@ -47,7 +51,6 @@ cp "$WIFI"    "$W/sys/lib/wifi_sd.so"
 cp "$PIR"     "$W/sys/lib/pir_sleep.so"
 cp "$BAT"     "$W/sys/lib/battery_osd.so"
 cp "$MICCAP"  "$W/sys/lib/mic_capture.so"
-cp "$SPKFEED" "$W/sys/lib/speaker_feed.so"
 chmod 0755 "$W/sys/lib/"*.so
 
 echo "=== daemon -> /system/bin + conf (CHANGE_ME) ==="
@@ -108,7 +111,7 @@ printf '\000\000\000\000' | dd of=/usr/bin/vp_project bs=1 seek=514932 count=4 c
   done ) &
 # 4) ONE LD_PRELOAD list for ALL features. okabweb.so leads: its constructor
 #    unsetenv("LD_PRELOAD")s so busybox children (udhcpc) don't inherit the chain.
-export LD_PRELOAD="/system/lib/okabweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so /system/lib/mic_capture.so /system/lib/speaker_feed.so"
+export LD_PRELOAD="/system/lib/okabweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so /system/lib/mic_capture.so "
 # 5) hand off to the real binary.
 exec /usr/bin/vp_project "$@"
 EOS

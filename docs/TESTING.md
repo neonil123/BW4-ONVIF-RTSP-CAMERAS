@@ -65,7 +65,7 @@ regression gate).
 
 | # | Test | Method | Expected | Pass criterion | Result |
 |---|---|---|---|---|---|
-| 2.1 | SD present + image md5 pre-flight | serial `md5sum /mnt/sda0/mtd4_integrated.bin` | `cedff4da9af8106f0e2fca94cc3cb3e5` | exact; **abort flash on mismatch** | ✅ (gate in `flash_integrated.ps1`) |
+| 2.1 | SD present + image md5 pre-flight | serial `md5sum /mnt/sda0/mtd4_integrated.bin` | `154ea4fbef9a515c56934f6d39a66f66` | exact; **abort flash on mismatch** | ✅ (gate in `flash_integrated.ps1`) |
 | 2.2 | Revert image md5 pre-flight | serial `md5sum /mnt/sda0/mtd4_okabweb_v8.bin` | `fb1266aa06d4faa7d1efa46c844d304f` | exact | ✅ |
 | 2.3 | Live `mtd4` backed up before flash | serial `cat /dev/mtd4 > /mnt/sda0/mtd4_backup_live.bin; md5sum` | non-empty, md5 recorded | file present | ✅ |
 | 2.4 | flashcp succeeds | serial `flashcp -v … /dev/mtd4` | no `error/failed/busy` in output | clean | ✅ |

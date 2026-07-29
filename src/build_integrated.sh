@@ -21,13 +21,12 @@ WIFI=$F/wifi_sd/wifi_sd.so
 PIR=$F/pir_sleep/pir_sleep.so
 ONVIFD=$F/onvif_rtsp/okam_onvifd            # on-device standalone RTSP:554 + ONVIF:80 daemon (now with G.711 audio track)
 MICCAP=$F/audio/mic_capture/mic_capture.so  # persistent pure-read of IMP AI dev1 -> UDP 127.0.0.1:5599 (feeds okam_onvifd audio); zero state change, WiFi-safe
-SPKFEED=$F/audio/speaker_feed/speaker_feed.so # talk-back: receives S16LE/16k on UDP 127.0.0.1:5600 -> IMP AO dev0 speaker via vendor ao_init/ao_send; idle+off at rest
 # devpw/vuid are PER-UNIT -- pass real values via env for a real build; the public
 # repo ships CHANGE_ME placeholders (never commit a real device password).
 DEVPW=${DEVPW:-CHANGE_ME}
 VUID=${VUID:-CHANGE_ME}
 
-for f in "$STOCK_MTD4" "$OKABWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP" "$SPKFEED"; do
+for f in "$STOCK_MTD4" "$OKABWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
   [ -f "$f" ] || { echo "ERROR missing $f"; exit 1; }
 done
 
@@ -43,7 +42,6 @@ cp "$WIFI"    "$W/sys/lib/wifi_sd.so"
 cp "$PIR"     "$W/sys/lib/pir_sleep.so"
 cp "$BAT"     "$W/sys/lib/battery_osd.so"
 cp "$MICCAP"  "$W/sys/lib/mic_capture.so"
-cp "$SPKFEED" "$W/sys/lib/speaker_feed.so"
 chmod 0755 "$W/sys/lib/"*.so
 
 echo "=== add /system/bin/okam_onvifd + /system/etc/okam_onvifd.conf ==="
@@ -103,7 +101,7 @@ printf '\000\000\000\000' | dd of=/usr/bin/vp_project bs=1 seek=514932 count=4 c
 # 4) ONE LD_PRELOAD list for ALL features -- no wrapper/rcS clobber. okabweb.so
 #    leads: its constructor unsetenv("LD_PRELOAD")s so busybox children (udhcpc)
 #    don't inherit the chain and fail to resolve pthread_create (which would kill WiFi).
-export LD_PRELOAD="/system/lib/okabweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so /system/lib/mic_capture.so /system/lib/speaker_feed.so"
+export LD_PRELOAD="/system/lib/okabweb.so /system/lib/wifi_sd.so /system/lib/pir_sleep.so /system/lib/battery_osd.so /system/lib/mic_capture.so "
 # 5) hand off to the real binary.
 exec /usr/bin/vp_project "$@"
 EOS

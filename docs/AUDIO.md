@@ -57,6 +57,17 @@ this platform must use the MIPS numbers.
 The **entire software pipeline is built and provably correct up to the codec**, but **no sound
 comes out of the speaker.** This is the one unsolved item in the project.
 
+> ⚠️ **Talk-back is on the [`talkback-experimental`](../../../tree/talkback-experimental) branch
+> and is deliberately kept OUT of the default image.** Beyond not producing speaker sound, the
+> `speaker_feed.so` AO calls (`IMP_AO_SetPubAttr`/`Enable`/`EnableChn` on the **shared**
+> `jz-inner-codec`) were observed to **corrupt the microphone** — the 8 kHz mic turns into a
+> robotic/metallic ("vocoder") signal. The sample rate stays correct 8 kHz and the daemon is
+> unchanged, so the damage is in the codec's analog/mixer state, not our software. Critically it
+> **survives a warm reboot and a soft power cycle** — on a battery camera, unplugging USB-C does
+> not drop the codec rail. **Recovery: a true full power-off (remove USB-C *and* the battery ~30 s)**
+> and run the mic-only image (no `speaker_feed`). Until the speaker enable is solved, do not put
+> `speaker_feed.so` in a chain you care about the mic on.
+
 ### The pipeline (all working)
 ```
 NVR talk audio (G.711)
