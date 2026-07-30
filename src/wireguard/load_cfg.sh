@@ -18,12 +18,13 @@ BLOB=/tmp/cfgblob
 : > /tmp/wireguard.conf
 echo on > /tmp/wg_default
 
-# read block 8 (0x40000 = 4096*64), 8 KB is plenty for both configs
-dd if=/dev/mtd4 bs=4096 skip=64 count=2 2>/dev/null > "$BLOB" || exit 0
+# read the config block at 0x58000 (last mtd4 block; 0x58000 = 4096*88), 8 KB
+dd if=/dev/mtd4 bs=4096 skip=88 count=2 2>/dev/null > "$BLOB" || exit 0
 [ -s "$BLOB" ] || exit 0
 
 sect=""
 while IFS= read -r line; do
+  line="$(printf '%s' "$line" | tr -d '\r')"   # strip CR (Windows .conf CRLF)
   case "$line" in
     '###END###') break ;;
     '###BW4CFG1###') continue ;;
