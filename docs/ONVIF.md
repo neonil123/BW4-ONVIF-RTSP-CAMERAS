@@ -1,9 +1,19 @@
 # ONVIF / RTSP on the device — `cam_onvifd`
 
+> **Repo-path note.** This page was written against the author's original working tree, so
+> parts of it reference paths like `builds/…` and `tools/…`. In **this** repo the daemon's
+> **source** lives under [`src/onvif_rtsp/`](../src/onvif_rtsp) and the **prebuilt binary**
+> under [`bin/cam_onvifd`](../bin/cam_onvifd). Any path still written as `builds/…` or
+> `tools/…` (other than [`tools/windows-flasher/`](../tools/windows-flasher), which *is*
+> published) is from that **private** tree and is **not in this repo** — those are marked
+> *(not published)*. Nothing this page tells you to run lives at one of those paths. The
+> md5s and sizes in the table below were recomputed from the files in this repo and
+> cross-checked against the same files unpacked out of the shipped squashfs.
+
 The camera now serves **standards RTSP and full ONVIF Profile-S from a daemon running on
-the camera itself** — no PC in the loop. This is the primary media path; the PC proxy
-(`tools/cam_rtsp_proxy.py`, see [ARCHITECTURE.md](ARCHITECTURE.md) §4) is now a
-dev/fallback tool.
+the camera itself** — no PC in the loop. This is the primary media path; the PC-side Python
+RTSP proxy (`cam_rtsp_proxy.py`, see [ARCHITECTURE.md](ARCHITECTURE.md) §4) was the earlier
+dev/fallback tool and is *(not published)* here.
 
 - **RTSP:** `rtsp://<cam-ip>:554/live` — H.264, 2304×1296, ~15 fps `[verified]`
 - **ONVIF:** SOAP on `:80` (`/onvif/device_service`), WS-Discovery on UDP `3702` `[verified]`
@@ -11,31 +21,36 @@ dev/fallback tool.
 - **Verified live** against a real **Synology Surveillance Station** NVR (native ONVIF add)
   and after a **cold boot** (auto-starts from the flashed image). `[verified]`
 
-`cam_onvifd` is a static MIPS32r2 LE C daemon (`builds/features/onvif_rtsp/`, source in
-`src/`). It is a byte-for-byte C port of the already-proven Python stack
-(`tools/vstarcam_frame.py` + `tools/rtsp_server.py` + `tools/cam_rtsp_proxy.py`). It
-connects to the camera's own local H.264 source (`vp_project`'s `livestream.cgi` at
-`127.0.0.1:81`, exposed by the `camweb.so` shim — see [FEATURES.md](FEATURES.md)) and
-re-serves it. `vp_project` contains **no** RTSP/ONVIF code of its own (probed with
-`tools/app_onvif.py`), so this is a genuinely new on-device component, not an unlock.
+`cam_onvifd` is a static MIPS32r2 LE C daemon (source in
+[`src/onvif_rtsp/src/`](../src/onvif_rtsp/src), build script
+[`src/onvif_rtsp/build.sh`](../src/onvif_rtsp/build.sh)). It is a behaviour-for-behaviour C
+port of the already-proven PC-side Python stack (`vstarcam_frame.py` + `rtsp_server.py` +
+`cam_rtsp_proxy.py`, *(not published)*) — see `vstarcam_frame.c` / `rtsp_server.c` /
+`cam_source.c` for the ported code. It connects to the camera's own local H.264 source
+(`vp_project`'s `livestream.cgi` at `127.0.0.1:81`, exposed by the `camweb.so` shim — see
+[FEATURES.md](FEATURES.md)) and re-serves it. `vp_project` contains **no** RTSP/ONVIF code
+of its own (probed with a one-off `app_onvif.py` scanner, *(not published)*), so this is a
+genuinely new on-device component, not an unlock.
 
 | artifact | value |
 |---|---|
-| daemon binary | `builds/features/onvif_rtsp/cam_onvifd` |
-| md5 (stripped) | **`8435ab9bcb6c1c235befcfd498b7cef9`** |
-| size | 210,888 bytes (~206 KiB), static MIPS32r2 LE ELF (`Type: EXEC`, no `PT_INTERP`) |
-| unstripped | `cam_onvifd.unstripped`, md5 `6d2ffd7bff76c836ab6d28d41abc5a55` |
-| config | `/system/etc/cam_onvifd.conf` (template: `cam_onvifd.conf.example`) |
-| runbook | `builds/features/onvif_rtsp/DEPLOY.md` |
+| daemon binary | [`bin/cam_onvifd`](../bin/cam_onvifd) (also embedded at `/system/bin/cam_onvifd` in [`firmware/mtd4_integrated.bin`](../firmware/mtd4_integrated.bin) — byte-identical) |
+| md5 (stripped) | **`067d4e3c6d17a29682686ebc3d7aae50`** |
+| size | 226,728 bytes (~221 KiB), static MIPS32r2 LE ELF (`Type: EXEC`, no `PT_INTERP`, stripped) |
+| unstripped | `cam_onvifd.unstripped` — *(not published)*; rebuild it from `src/onvif_rtsp/build.sh` if you need symbols |
+| source | [`src/onvif_rtsp/src/`](../src/onvif_rtsp/src) |
+| config | `/system/etc/cam_onvifd.conf` (template: [`src/onvif_rtsp/cam_onvifd.conf.example`](../src/onvif_rtsp/cam_onvifd.conf.example)) |
+| runbook | [FLASHING.md](FLASHING.md) §4 (the original `DEPLOY.md` is *(not published)*) |
 
 > **Why static, not dynamic against the device uClibc 0.9.33.** No uClibc cross-toolchain
 > exists in the dev environment, and musl's CRT (`__libc_start_main(sp)`) is
 > calling-convention-incompatible with uClibc's multi-arg `__libc_start_main` — a
 > musl-object/uClibc-runtime binary can't even reach `main()` without a hand-written o32
-> CRT stub, unverifiable without the device or MIPS emulation. A well-tested 206 KiB static
-> binary (same size class as `tools/aic_keepalive`) was the safer call. Swapping `build.sh`'s
-> `CC` to a real uClibc toolchain and dropping `-static` recovers the dynamic path with no
-> source change. Details in `builds/features/onvif_rtsp/README.md`. `[verified]`
+> CRT stub, unverifiable without the device or MIPS emulation. A well-tested ~221 KiB static
+> binary (the same size class as other static MIPS helpers already proven on this device) was
+> the safer call. Swapping [`src/onvif_rtsp/build.sh`](../src/onvif_rtsp/build.sh)'s `CC` to a
+> real uClibc toolchain and dropping `-static` recovers the dynamic path with no source
+> change. `[verified]`
 
 ---
 
@@ -58,8 +73,9 @@ re-serves it. `vp_project` contains **no** RTSP/ONVIF code of its own (probed wi
 
 One HTTP endpoint (`/onvif/device_service`) handles Device + Media + Event SOAP. Actions
 are matched by a substring scan of the request body (no XML parser), the same technique the
-reference CGI implementations use; response shapes follow the bundled
-`builds/prudynt_bundle/onvif` reference for client compatibility.
+reference CGI implementations use; response shapes were modelled on the open-source
+`prudynt` ONVIF CGI reference (consulted during development; that vendor bundle is
+*(not published)* here) for client compatibility.
 
 ### 2a. Access policy — this is the part that made Synology work `[verified]`
 
@@ -78,8 +94,10 @@ Surveillance Station's add-camera wizard, which was the acceptance target):
   `env:Receiver`/`ter:ActionNotSupported` (never a bare 500), so a client can tolerate a
   missing non-critical op instead of aborting.
 
-> **Contradiction flagged:** the comment in `cam_onvifd.conf.example` (and the header of
-> `config.c`) says *"Every ONVIF operation except GetSystemDateAndTime/GetHostname/GetWsdlUrl
+> **Contradiction flagged:** the comment in
+> [`src/onvif_rtsp/cam_onvifd.conf.example`](../src/onvif_rtsp/cam_onvifd.conf.example) (and
+> the header of [`src/onvif_rtsp/src/config.c`](../src/onvif_rtsp/src/config.c))
+> says *"Every ONVIF operation except GetSystemDateAndTime/GetHostname/GetWsdlUrl
 > requires authentication."* That is **stale/inverted** — the shipped code does the
 > opposite (only `GetStreamUri` is gated; everything else is pre-auth open). Trust the code
 > and this doc, not that comment. The default credentials it documents (`admin`/`admin`) are
@@ -184,7 +202,7 @@ Synology Surveillance Station → **Add Camera** → choose brand/**Marca = `ONV
 
 | field | value |
 |---|---|
-| IP address | `<cam-ip>` (pilot: `192.168.100.106`) |
+| IP address | `<cam-ip>` — find it in your router's DHCP leases, or via `ifconfig vnet0` on the serial console |
 | Port | **`80`** |
 | Username / Password | the conf's `onvif_user` / `onvif_pass` (**default `admin`/`admin`**) |
 
@@ -225,16 +243,20 @@ segment; the two harness warnings about discovery (see [TESTING.md](TESTING.md))
 The daemon is **baked into the integrated `/system` image and auto-starts on boot** (the
 wrapper waits for `:81`, copies the binary into `/tmp`, `chmod`s it, and runs it with
 `/system/etc/cam_onvifd.conf`). See [FLASHING.md](FLASHING.md) §4 for the persistent-install
-and TFTP-flash mechanics, and `builds/features/onvif_rtsp/DEPLOY.md` for the run-it-now serial
-path.
+and TFTP-flash mechanics — that section also covers the run-it-now serial path (push
+[`bin/cam_onvifd`](../bin/cam_onvifd) to `/tmp`, `chmod +x`, run it with a conf built from
+[`src/onvif_rtsp/cam_onvifd.conf.example`](../src/onvif_rtsp/cam_onvifd.conf.example)). The
+original standalone `DEPLOY.md` is *(not published)*.
 
 **Config precedence:** `--devpw`/`--vuid`/`--onvif-user`/`--onvif-pass` CLI > `CAM_DEVPW`/
 `CAM_VUID` env > `/system/etc/cam_onvifd.conf`. Only `devpw`/`vuid` truly need setting.
 They are **per-unit random** (the pilot's are `devpw=<your-unit-devpw>`, `vuid=<your-unit-vuid>`,
 used only as a worked example — your unit differs; re-read `devpw` from
-`/proc/$(pidof vp_project)/mem @0x81E988` if the camera is re-onboarded). `build_integrated.sh`
-takes `DEVPW=`/`VUID=` env at build time and ships **`CHANGE_ME`** placeholders in the public
-repo — never commit a real device password.
+`/proc/$(pidof vp_project)/mem @0x81E988` if the camera is re-onboarded).
+[`src/build_integrated.sh`](../src/build_integrated.sh) takes `DEVPW=`/`VUID=` env at build
+time; the image published here ships **`CHANGE_ME`** placeholders (confirmed by unpacking
+`firmware/mtd4_integrated.bin` — `/system/etc/cam_onvifd.conf` contains
+`devpw=CHANGE_ME` / `vuid=CHANGE_ME`) — never commit a real device password.
 
 **Debugging against a real NVR:**
 - Bump `log_level=3`. Every request logs
@@ -248,10 +270,25 @@ repo — never commit a real device password.
 
 ## 7. Acceptance
 
-See [TESTING.md](TESTING.md) §6 and `tools/onvif_test/ACCEPTANCE.md`. The daemon is declared
-ONVIF-working when the PC harness reports 0 failures against the device:
+See [TESTING.md](TESTING.md) §6 for the acceptance criteria. The daemon was declared
+ONVIF-working when the author's PC harness (`onvif_test/onvif_harness.py` +
+`ACCEPTANCE.md`) reported 0 failures against the device; **that harness is
+*(not published)* in this repo**, so there is no `python …` command here to run.
+
+To re-verify a unit yourself with off-the-shelf tools instead:
+
 ```
-python tools/onvif_test/onvif_harness.py --target <cam-ip> --user admin --pwd admin
+# ONVIF: enumerate + fetch the stream URI (any Profile-S client works)
+onvif-cli --host <cam-ip> --port 80 --user admin --password admin devicemgmt GetDeviceInformation
+# snapshot (plain HTTP, no ONVIF client needed)
+curl -v http://<cam-ip>:80/onvif/snapshot -o snap.jpg     # -> "JPEG image data"
+# RTSP
+ffprobe -rtsp_transport tcp rtsp://<cam-ip>:554/live
 ```
-Live cold-boot run scored **20/22** — the only two fails are the environmental `dasHost`
-UDP-3702 discovery artifact on the Windows test box (§3), not daemon bugs.
+
+ONVIF Device Manager (Windows) and `onvif-cli` (the Python `onvif-zeep` package) both
+exercise the same ops the harness did.
+
+The last live cold-boot harness run scored **20/22** — the only two fails are the
+environmental `dasHost` UDP-3702 discovery artifact on the Windows test box (§3), not daemon
+bugs.

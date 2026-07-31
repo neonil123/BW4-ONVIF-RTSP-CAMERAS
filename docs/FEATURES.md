@@ -1,13 +1,17 @@
 # Features
 
-> **Repo-path & count note.** This page was written against the original working tree, so it
-> references paths like `builds/…` and `tools/…` and says "four shims". In **this** repo the shim
-> **sources** live under [`src/shims/`](../src/shims) and the **prebuilt binaries** under
-> [`bin/`](../bin). The shipped overlay carries **five** shims: the four documented below **plus**
-> `mic_capture.so` (native `IMP_AI` mic reader, see **[AUDIO.md](AUDIO.md)**). The talk-back shim
-> `speaker_feed.so` is **not** in the default image — it lives on the `talkback-experimental`
-> branch because it corrupts the mic (see [AUDIO.md](AUDIO.md)). Treat the md5s below as illustrative;
-> the authoritative firmware md5 is in [`firmware/mtd4_integrated.bin.md5`](../firmware).
+> **Repo-path & count note.** This page was written against the original working tree, so some
+> prose still references paths like `builds/…` and `tools/…` and says "four shims". In **this**
+> repo the shim **sources** live under [`src/shims/`](../src/shims) and the **prebuilt binaries**
+> under [`bin/`](../bin). The shipped overlay carries **five** shims: the four documented below
+> **plus** `mic_capture.so` (native `IMP_AI` mic reader, see **[AUDIO.md](AUDIO.md)**). The
+> talk-back shim `speaker_feed.so` is **not** in the default image — it lives on the
+> `talkback-experimental` branch because it corrupts the mic (see [AUDIO.md](AUDIO.md)).
+>
+> Any path below still written as `builds/…` or `tools/…` (other than
+> [`tools/windows-flasher/`](../tools/windows-flasher), which *is* published) refers to the
+> author's **private** working tree and is **not in this repo** — such lines are marked
+> *(not published)*. Nothing you are told to run lives at one of those paths.
 
 The deployable is a set of **`LD_PRELOAD` shims** that augment the stock `vp_project` **without
 modifying its binary**, plus **one on-device daemon** (`cam_onvifd`) that re-serves the
@@ -18,30 +22,33 @@ Each shim is a freestanding `DYN` MIPS o32 mips32r2 PIC object with **no NEEDED 
 an `.init_array` constructor, and undefined symbols limited to the libc functions it uses
 (resolved at load from `vp_project`'s own uClibc). All target addresses are **fixed** because
 `vp_project` is ET_EXEC / non-PIE at base `0x400000` (see
-[ARCHITECTURE.md](ARCHITECTURE.md) §1). Addresses were RE'd from
-`builds/exfil/vp_project.bin` (md5 `5a8ea3edc499ffe644efaf2700ec037d`, == the on-device
-binary).
+[ARCHITECTURE.md](ARCHITECTURE.md) §1). Addresses were RE'd from a dump of the stock
+`vp_project` (md5 `5a8ea3edc499ffe644efaf2700ec037d`, == the on-device binary; the dump
+itself is vendor code and is **not published** here).
 
-**md5s below are the authoritative on-disk values** (recomputed from the repo files, not
-transcribed). Where an older README lists a different md5, that README is stale — see the
-per-feature notes and [the contradictions list in the project report].
+**The md5s below were recomputed from the files in this repo** (`md5sum bin/*
+firmware/mtd4_integrated.bin`) and cross-checked against the same files unpacked out of the
+shipped squashfs — they match byte for byte. Where an older README or an earlier revision of
+these docs lists a different md5, that older value is stale.
 
-| shim | file | md5 | status |
-|---|---|---|---|
-| camweb (v5) | `tools/camweb/camweb_v5.so` | `822795eb1732aaef79d21fb40dfe6938` | **verified live** |
-| wifi_sd | `builds/features/wifi_sd/wifi_sd.so` | `f3c6c2ab296d5c5cdfbb91fd0d4da53e` | offline-ok; apply seen live |
-| pir_sleep | `builds/features/pir_sleep/pir_sleep.so` | `0cf8afb9053a70c59edaa7471331f8e0` | offline-ok (thr=50) |
-| battery_osd | `builds/features/battery_osd/battery_osd.so` | `119900999bf56f65b1c652a79a0e2a8b` | verified live (display) |
+| shim | file | md5 | size | status |
+|---|---|---|---|---|
+| camweb (v5) | [`bin/camweb.so`](../bin/camweb.so) | `53c59f013e7d1098edec541e330a16fb` | 2,080 B | **verified live** |
+| wifi_sd | [`bin/wifi_sd.so`](../bin/wifi_sd.so) | `f3c6c2ab296d5c5cdfbb91fd0d4da53e` | 4,916 B | offline-ok; apply seen live |
+| pir_sleep | [`bin/pir_sleep.so`](../bin/pir_sleep.so) | `0cf8afb9053a70c59edaa7471331f8e0` | 2,600 B | offline-ok (thr=50) |
+| battery_osd | [`bin/battery_osd.so`](../bin/battery_osd.so) | `119900999bf56f65b1c652a79a0e2a8b` | 3,032 B | verified live (display) |
+| mic_capture | [`bin/mic_capture.so`](../bin/mic_capture.so) | `bc49c932a6a84f49a51492c487846d1f` | 5,376 B | verified live (see [AUDIO.md](AUDIO.md)) |
 
-The integrated deployable that carries all four shims **plus `cam_onvifd`**:
-`builds/features/integrated/mtd4_integrated.bin`, md5 **`949ddff9eef4a6cdfd215ec1169c74eb`**
-(recomputed from the current file). Two older values float around and are **stale**: the
-integrated `README.md` cites `6cd7c13a…` (predates the final battery_osd/pir_sleep rebuilds)
-and earlier `docs/` cited `0b3273fd…` (the 4-shim build *before* the daemon was baked in). The
-current image, which auto-starts the daemon on boot, is `6b1203e6…`.
+The integrated deployable that carries **all five shims plus `cam_onvifd`**:
+[`firmware/mtd4_integrated.bin`](../firmware/mtd4_integrated.bin), 393,216 B, md5
+**`949ddff9eef4a6cdfd215ec1169c74eb`** — recomputed from the current file and identical to
+the value recorded in
+[`firmware/mtd4_integrated.bin.md5`](../firmware/mtd4_integrated.bin.md5), which is the
+authoritative reference. Older values that float around in earlier notes — `6cd7c13a…`,
+`0b3273fd…`, `6b1203e6…` — are all **stale** and do **not** describe the image in this repo.
 
-The daemon binary itself: `builds/features/onvif_rtsp/cam_onvifd`, md5
-**`8435ab9bcb6c1c235befcfd498b7cef9`**.
+The daemon binary itself: [`bin/cam_onvifd`](../bin/cam_onvifd), 226,728 B, md5
+**`067d4e3c6d17a29682686ebc3d7aae50`**.
 
 ---
 
@@ -58,21 +65,27 @@ The daemon binary itself: `builds/features/onvif_rtsp/cam_onvifd`, md5
   **required** for `:81` to bind. The wrapper `dd`-patches only the **RAM** copy.
 
 **Mechanism:** the constructor spawns a worker; after a short delay it calls
-`create_web()` in a loop until `*fd >= 0`. Source: `tools/camweb/camweb.c` (the shipped
-`camweb_v5.so` adds the critical `unsetenv("LD_PRELOAD")` in its constructor + logging).
+`create_web()` in a loop until `*fd >= 0`. Source:
+[`src/shims/camweb.c`](../src/shims/camweb.c); the shipped build
+([`bin/camweb.so`](../bin/camweb.so), the "v5" build) adds the critical
+`unsetenv("LD_PRELOAD")` in its constructor + logging.
 
 **Live facts that corrected the original RE:**
 - It binds **`0.0.0.0:81`** (LAN-reachable), **not** `127.0.0.1:81` (the `camweb.c` header
-  comment and `tools/camweb/README.md` still say 127.0.0.1 — **stale**).
+  comment still says 127.0.0.1 — **stale**).
 - Version history worth knowing: v1/v2 broke WiFi (LD_PRELOAD cascaded to busybox
   `udhcpc`); v3 weak-symbol approach failed to load on uClibc 0.9.33; **v4 added
   `unsetenv`** (WiFi validated live); **v5** = v4 + the create_web poke + logging (shipped).
   See [ARCHITECTURE.md](ARCHITECTURE.md) §3 for the full `unsetenv` reasoning — **camweb
   must stay first in the LD_PRELOAD chain**.
 
-**Delivery of just camweb (RTSP-only):** `builds/patched/mtd4_camweb_v8.bin`
-(md5 `fb1266aa06d4faa7d1efa46c844d304f`) — also the **primary revert** target (back to a
-known-good RTSP-only state) staged on the SD during integrated flashing.
+**Delivery of just camweb (RTSP-only):** the author kept a camweb-only `mtd4` image
+(`mtd4_camweb_v8.bin`, md5 `fb1266aa06d4faa7d1efa46c844d304f`) as the **primary revert**
+target (back to a known-good RTSP-only state), staged on the SD during integrated flashing.
+That image is *(not published)* in this repo — only the full integrated image ships. To
+build an equivalent camweb-only overlay yourself, run
+[`src/build_integrated.sh`](../src/build_integrated.sh) with only `camweb.so` in the
+`LD_PRELOAD` list, or use the stock-restore path in [FLASHING.md](FLASHING.md) to revert.
 
 ---
 
@@ -94,7 +107,10 @@ PASSWORD=YourWiFiPassword
 - Tolerant of CRLF, whitespace, blank lines, `#`/`;` comments; SSID may contain spaces/`=`.
 - Validation (else the file is ignored — safe no-op): SSID 1..32 chars; password empty
   (open) or **8..63** chars (WPA2 minimum). Parser is host-unit-tested (25 cases,
-  `test_parser.c` → `ALL TESTS PASSED`) and shared verbatim with the shim (`parse_ini.h`).
+  `test_parser.c` → `ALL TESTS PASSED`) and shared verbatim with the shim via
+  [`src/shims/parse_ini.h`](../src/shims/parse_ini.h), which
+  [`src/shims/wifi_sd.c`](../src/shims/wifi_sd.c) `#include`s. The header ships; the
+  host-side unit test itself is *(not published)*.
 
 **Key addresses:**
 - WiFi-connect entry = **`0x00453a2c`** `int fn(char *ssid, char *pwd, int mode)`; the shim
@@ -148,13 +164,14 @@ bytes** — it never calls the sleep path itself and touches no exit path.
   `0x48e92c` sends **MCU command 0x30** via `aic_channel_msg_send` (`0x48b874`) — the
   vendor's own tested deep-sleep + PIR-wake power path.
 
-**Threshold** = `#define THRESHOLD` in `pir_sleep.c`; the shipped `pir_sleep.so`
-(md5 `0cf8afb9…`) is **50** (the earlier `pir_sleep.prev.so`, md5 `56bdd5d5…`, was 30).
+**Threshold** = `#define THRESHOLD` in [`src/shims/pir_sleep.c`](../src/shims/pir_sleep.c);
+the shipped [`bin/pir_sleep.so`](../bin/pir_sleep.so) (md5 `0cf8afb9…`) is **50** (an earlier
+`pir_sleep.prev.so`, md5 `56bdd5d5…`, was 30 — *(not published)*).
 Vendor-valid range 30..100; the +10 % wake hysteresis is vendor code (changing it needs a
 `.text` patch — not done).
 
-> Two internal inconsistencies to be aware of (flagged, not papered over): (a) the
-> `pir_sleep/README.md` prose and its objdump snippet still say `li 30`/`threshold=30` in
+> Two internal inconsistencies to be aware of (flagged, not papered over): (a) the original
+> per-feature README prose and its objdump snippet still said `li 30`/`threshold=30` in
 > places even though the shipped build is 50 — trust the md5 (`0cf8afb9` = 50). (b)
 > **Battery-source caveat:** the OSD/app `%` historically came from MCU byte `0x7fbf58`,
 > while the sleep decision uses getter `0x48d0ec` (direct byte `0x811ee0` if 1..254, else a
@@ -201,9 +218,10 @@ buffer content can fix. So the shipped label is `"%Y-%m-%d %H:%M:%S NN%%"` (strf
 OSD read a real ~98 %. Re-enable a text label with `-DOSD_LABEL='" BAT "'` once a unit's
 real font charset is known.
 
-**Build knobs (`battery_osd.c`):** `-DOSD_IDX=0|1|2` (0 = timestamp merge, default),
-`-DOSD_START_DELAY=<s>`, `-DOSD_PERIOD=<s>`. `battery_osd.prev.so` (md5 `f9892687…`) is the
-earlier broken build (rendered `… A 0%`) kept for reference.
+**Build knobs ([`src/shims/battery_osd.c`](../src/shims/battery_osd.c)):** `-DOSD_IDX=0|1|2`
+(0 = timestamp merge, default), `-DOSD_START_DELAY=<s>`, `-DOSD_PERIOD=<s>`. An earlier
+broken build, `battery_osd.prev.so` (md5 `f9892687…`, rendered `… A 0%`), was kept for
+reference in the working tree and is *(not published)*.
 
 > The strftime **output** buffer is 256 bytes on the stack (`strftime(out,256,…)`
 > `0x47e5e8`), so the ~28-char merged line never truncates — an earlier "small output
@@ -219,14 +237,18 @@ WS-Discovery + snapshot). It is the **primary media path**; the PC proxy is now 
 Verified live against a real **Synology Surveillance Station** NVR and after a **cold boot**
 (auto-starts from the flashed image).
 
-- Binary: `builds/features/onvif_rtsp/cam_onvifd`, md5 **`8435ab9bcb6c1c235befcfd498b7cef9`**,
-  210,888 bytes, static MIPS32r2 LE (`Type: EXEC`, no `PT_INTERP`).
-- Source: `builds/features/onvif_rtsp/src/` (C ports of `vstarcam_frame.py` / `rtsp_server.py`
-  / `cam_rtsp_proxy.py`, plus `onvif_soap.c`, `onvif_wsd.c`, `wsse.c`, `httpauth.c`, `md5.c`,
-  `h264_sps.c`). Build: `builds/features/onvif_rtsp/build.sh` (WSL musl MIPSEL cross).
-- Config: `/system/etc/cam_onvifd.conf` — per-unit `devpw`/`vuid` (for the `:81` handshake)
-  + `onvif_user`/`onvif_pass` (what the NVR types, default `admin`/`admin`). `build_integrated.sh`
-  takes `DEVPW=`/`VUID=` env; ships `CHANGE_ME` placeholders.
+- Binary: [`bin/cam_onvifd`](../bin/cam_onvifd), md5 **`067d4e3c6d17a29682686ebc3d7aae50`**,
+  226,728 bytes, static MIPS32r2 LE (`Type: EXEC`, no `PT_INTERP`).
+- Source: [`src/onvif_rtsp/src/`](../src/onvif_rtsp/src) (C ports of the PC-side Python proxy
+  stack, plus `onvif_soap.c`, `onvif_wsd.c`, `wsse.c`, `httpauth.c`, `md5.c`,
+  `h264_sps.c`). Build: [`src/onvif_rtsp/build.sh`](../src/onvif_rtsp/build.sh)
+  (WSL musl MIPSEL cross).
+- Config: `/system/etc/cam_onvifd.conf` (template:
+  [`src/onvif_rtsp/cam_onvifd.conf.example`](../src/onvif_rtsp/cam_onvifd.conf.example)) —
+  per-unit `devpw`/`vuid` (for the `:81` handshake) + `onvif_user`/`onvif_pass` (what the NVR
+  types, default `admin`/`admin`).
+  [`src/build_integrated.sh`](../src/build_integrated.sh) takes `DEVPW=`/`VUID=` env; the
+  shipped image carries `CHANGE_ME` placeholders.
 - **Purely additive** — never stops/patches `vp_project`, so the AIC keepalive stays intact.
 
 Access policy in one line: **all discovery/capability/activation/event ops are pre-auth open;
@@ -236,12 +258,26 @@ accepted). This is what real Profile-S cameras do and what Synology needs. Full 
 
 ---
 
-## Integrated image — four shims + the daemon
+## Integrated image — five shims + the daemon
 
-`builds/features/integrated/mtd4_integrated.bin` (md5 **`949ddff9eef4a6cdfd215ec1169c74eb`**)
-is a single `/system` XZ-squashfs with one wrapper, all four `.so` in one `LD_PRELOAD`, and
-`cam_onvifd` (+ its conf) that the wrapper auto-starts once `:81` is up. See
-[ARCHITECTURE.md](ARCHITECTURE.md) §3 for the wrapper and chain-order dependency, and
-[FLASHING.md](FLASHING.md) §4 for the flash/revert/auto-start procedure. Components embedded
-(and verified byte-identical) in the image: `camweb.so`=`822795eb…`, `wifi_sd.so`=`f3c6c2ab…`,
-`pir_sleep.so`=`0cf8afb9…`, `battery_osd.so`=`119900999…`, `cam_onvifd`=`8435ab9b…`.
+[`firmware/mtd4_integrated.bin`](../firmware/mtd4_integrated.bin) (393,216 bytes, md5
+**`949ddff9eef4a6cdfd215ec1169c74eb`**) is a single `/system` XZ-squashfs with one wrapper,
+all five `.so` in one `LD_PRELOAD`, and `cam_onvifd` (+ its conf) that the wrapper auto-starts
+once `:81` is up. See [ARCHITECTURE.md](ARCHITECTURE.md) §3 for the wrapper and chain-order
+dependency, and [FLASHING.md](FLASHING.md) §4 for the flash/revert/auto-start procedure.
+
+Components embedded in the image, **verified byte-identical** to the copies in
+[`bin/`](../bin) by unpacking the shipped squashfs and re-hashing every member:
+
+| member in image | md5 | size |
+|---|---|---|
+| `/system/lib/camweb.so` | `53c59f013e7d1098edec541e330a16fb` | 2,080 B |
+| `/system/lib/wifi_sd.so` | `f3c6c2ab296d5c5cdfbb91fd0d4da53e` | 4,916 B |
+| `/system/lib/pir_sleep.so` | `0cf8afb9053a70c59edaa7471331f8e0` | 2,600 B |
+| `/system/lib/battery_osd.so` | `119900999bf56f65b1c652a79a0e2a8b` | 3,032 B |
+| `/system/lib/mic_capture.so` | `bc49c932a6a84f49a51492c487846d1f` | 5,376 B |
+| `/system/bin/cam_onvifd` | `067d4e3c6d17a29682686ebc3d7aae50` | 226,728 B |
+
+The image also carries `/system/bin/vp_project` (the 2,816-byte `LD_PRELOAD` **wrapper
+script**, not the vendor binary — it shadows the real one via `PATH`), `/system/etc/cam_onvifd.conf`
+(with `CHANGE_ME` placeholders), and small `version/` and `www/` stubs.
