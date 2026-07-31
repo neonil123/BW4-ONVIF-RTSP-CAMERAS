@@ -24,7 +24,11 @@ channel and has one hard rule.
    `mtd5` (NVS) and the appfs stay stock. This is what makes every deploy revert-safe.
 2. **NEVER DFU unless the camera won't boot at all.** A full-chip DFU write **rewrites
    `mtd5` NVS and erases the WiFi credentials** — you'd have to re-onboard (and re-read the
-   device password). Revert with `flashcp` of a stock/known-good `mtd4` instead.
+   device password). Revert with `flashcp` of your own known-good `mtd4` backup instead.
+   **The normal stock → custom conversion needs no DFU at all:** if the camera boots, you get
+   a serial root shell and `flashcp` the image to `mtd4` (that is the whole procedure below).
+   DFU is *only* for a bricked unit that will not boot — [HARDWARE_DFU.md](HARDWARE_DFU.md)
+   is the rescue path, not a prerequisite for conversion.
 3. **Never reflash `mtd3`.** The T23 uses a **hardware LZMA** decoder that rejects any
    re-compressed rootfs (even a no-op) → `lzma dec timeout` boot loop. See
    [ARCHITECTURE.md](ARCHITECTURE.md) §2. This is why everything ships via `mtd4`.
@@ -43,12 +47,10 @@ channel and has one hard rule.
   the only non-DFU flash channel.)
 - Serial console on **COM3, 115200 8N1, DTR/RTS de-asserted**. Root login
   `vstarcam2017` / `20170912`.
-- **Your own `mtd4` backup staged on the SD** (this is your revert image — take it *before*
-  you flash anything):
-  ```sh
-  cat /dev/mtd4 > /mnt/sda0/mtd4_stock_backup.bin
-  md5sum /mnt/sda0/mtd4_stock_backup.bin      # record this
-  ```
+- **Your own `mtd4` backup staged on the SD** — `/mnt/sda0/mtd4_stock_backup.bin`. **This is
+  your revert image; this repo ships no vendor stock image and cannot generate one.** Take it
+  and verify it *before* you write anything — the full procedure is the
+  [pre-flight gate](#pre-flight-gate-mandatory--abort-on-any-mismatch) below.
 - **Optional but recommended: a full-chip DFU backup** of the whole 8 MiB before you start
   (`dfu-util -a flash -U mycam_full_backup.bin`, see the DFU section). Keep it off-repo — a
   full dump contains your NVS/WiFi creds and vendor firmware; **never publish it.**
@@ -57,20 +59,45 @@ channel and has one hard rule.
 
 ## Deploy — flash the integrated image to `mtd4`
 
-Pre-flight md5 gates (abort if any mismatches — do **not** DFU to "fix" the SD):
+### Pre-flight gate (mandatory — abort on ANY mismatch)
+
+This gate is **fail-closed**: every check must pass *before* you run the destructive step. If
+one fails, stop and fix it — do **not** DFU to "fix" the SD.
+
+**There is no vendor revert image in this repo, and nothing here can produce one. Your revert
+image is the `mtd4` you read off your own camera.** Take it, record its md5, and prove it read
+back faithfully — that md5 is the only thing standing between you and an unrecoverable unit.
 
 ```sh
 mount | grep sda0                                   # SD must be at /mnt/sda0
-md5sum /mnt/sda0/mtd4_integrated.bin                # MUST equal 949ddff9eef4a6cdfd215ec1169c74eb
-md5sum /mnt/sda0/mtd4_camweb_v8.bin                # MUST equal fb1266aa06d4faa7d1efa46c844d304f
-cat /dev/mtd4 > /mnt/sda0/mtd4_backup_live.bin && md5sum /mnt/sda0/mtd4_backup_live.bin  # extra revert
+
+# --- Gate 1: capture YOUR revert image and prove it is a faithful copy -------
+cat /dev/mtd4 > /mnt/sda0/mtd4_stock_backup.bin     # this IS your revert image
+cat /dev/mtd4 > /tmp/mtd4_reread.bin                # independent second read
+md5sum /mnt/sda0/mtd4_stock_backup.bin /tmp/mtd4_reread.bin
+#   -> the two md5s MUST be identical. WRITE THIS VALUE DOWN (and off the camera).
+#      Differ = bad SD write or a flaky read: re-take the backup. DO NOT PROCEED.
+ls -l /mnt/sda0/mtd4_stock_backup.bin               # MUST be 393216 bytes (0x60000)
+
+# --- Gate 2: verify the image you are about to flash -------------------------
+md5sum /mnt/sda0/mtd4_integrated.bin
+#   -> MUST equal the md5 your build printed (build_clean_image.sh / build_integrated.sh
+#      print "md5 <hex>" on their last line). For the as-committed public image, that is
+#      the value in firmware/mtd4_integrated.bin.md5.
 ```
 
-> The md5 to verify is **`949ddff9eef4a6cdfd215ec1169c74eb`** — the current
-> `mtd4_integrated.bin`, which carries the four shims **plus `cam_onvifd`** and auto-starts
-> the daemon on boot. Two older values are **stale**: `0b3273fd…` was the 4-shim build before
-> the daemon was baked in, and the integrated `README.md` / `BENCH_FLASH_INTEGRATED.md`
-> runbook cite `6cd7c13a…` (older still, before the final battery_osd/pir_sleep rebuilds).
+> **Which md5 should Gate 2 expect?** Whatever *your own build output* reported — that is the
+> authority. The committed `firmware/mtd4_integrated.bin` ships its md5 alongside it in
+> [`firmware/mtd4_integrated.bin.md5`](../firmware/mtd4_integrated.bin.md5) (currently
+> `949ddff9eef4a6cdfd215ec1169c74eb`), so `md5sum -c` it if you flash the stock-built file
+> unchanged. The moment you rebuild with your unit's `DEVPW`/`VUID` the md5 **will** differ —
+> that is expected, and the build's printed md5 becomes the value Gate 2 must match.
+
+Keep `mtd4_stock_backup.bin` and its md5 somewhere off the SD card (copy it to your PC). The
+SD card is the one component observed to fail on this hardware; a revert image that only exists
+on a dead card is not a revert image.
+
+### Write it (destructive — only once both gates pass)
 
 `/system` (mtd4) is mounted read-only while running, so kill `vp_project`, unmount, flash,
 reboot in one shot:
@@ -93,9 +120,12 @@ sf write 0x80600000 0x760000 0x60000
 reset
 ```
 
-**Automated (PC-driven over COM3):** `tools/flash_integrated.ps1` does the login,
-md5 pre-flight gates, live-`mtd4` backup, kill/umount/flashcp/reboot, and aborts before the
-destructive step on any mismatch.
+> **Note:** the author's private tree has a PowerShell harness that drives the whole sequence
+> over COM3 (login, gates, backup, kill/umount/flashcp/reboot, abort-on-mismatch). **It is not
+> published here.** The commands above are the complete procedure — run them by hand in a
+> serial session. The only flasher this repo ships is
+> [`tools/windows-flasher/`](../tools/windows-flasher/), which is a **full-chip USB-DFU rescue**
+> kit for a unit that won't boot — **not** an `mtd4` flasher, and not part of this procedure.
 
 The device may perform **one harmless auto-reboot** mid first-boot (AIC WiFi not ready on
 the first try); the second boot is clean. This is stock AIC behaviour, not the shim.
@@ -109,29 +139,36 @@ The device's busybox **does have a `tftp` client** (it lacks `wget`/`nc`/`base64
 camera is on WiFi you can pull an image over the **network** and `flashcp` it — no card
 reader, no SD juggling:
 
-```
-# PC (any LAN host the camera can route to): serve the file on a high UDP port.
-python tools/tftp_server.py                 # serves builds/exfil/ on UDP 6900 (see below)
-```
+**Port: this doc uses UDP `6900` throughout.** Nothing on the device or in this repo hard-codes
+it — it is just the port these examples launch the server on. If you serve on a different port,
+change it in the `tftp -g` line to match; the two must agree.
+
+**PC side — any standard TFTP server works.** This repo ships no server script; use whatever
+your OS offers, pointed at the directory holding your image, listening on UDP 6900. For example
+`tftpd-hpa`/`dnsmasq --enable-tftp` on Linux, [tftpd64](https://pjo2.github.io/tftpd64/) on
+Windows, or a one-liner such as `python3 -m py3tftp --host 0.0.0.0 --port 6900`. Open UDP 6900
+in your PC firewall — a silently-dropped first packet is the usual cause of a hung `tftp -g`.
+
 ```sh
 # device (serial root shell), <PC_IP> = the serving host:
 cd /tmp
 tftp -g -r mtd4_integrated.bin -l /tmp/mtd4_integrated.bin <PC_IP> 6900
-md5sum /tmp/mtd4_integrated.bin             # MUST equal 949ddff9eef4a6cdfd215ec1169c74eb
+md5sum /tmp/mtd4_integrated.bin             # MUST equal your build's md5 (see the pre-flight gate)
+# Take your mtd4 backup first if you have not already — see the pre-flight gate above.
 kill -9 $(pidof vp_project) 2>/dev/null ; sleep 2
 umount /system 2>/dev/null
 flashcp -v /tmp/mtd4_integrated.bin /dev/mtd4
 reboot
 ```
 
+- The **pre-flight gate still applies**: TFTP only changes how the image arrives, not the rule
+  that you must hold a verified `mtd4` backup before writing. TFTP into `/tmp` (tmpfs) means the
+  image is gone on reboot, so stage the *backup* onto the SD or pull it to the PC.
 - The same channel delivers the daemon binary and its conf for a **run-it-now** test without
-  reflashing — `tftp -g` them into `/tmp`, `chmod +x`, run. See
-  `builds/features/onvif_rtsp/DEPLOY.md`.
-- Port: `tools/tftp_server.py` serves `builds/exfil/` (DEPLOY.md uses **6900**; some helper
-  scripts use 6969 — match the port you launched). Scripts:
-  `tools/{deploy,launch,redeploy}_onvifd.ps1`.
-- Stop the PC RTSP proxy first if it's running — the camera's `:81` is single-client, and the
-  daemon will contend with the proxy for it.
+  reflashing — `tftp -g` them into `/tmp`, `chmod +x`, run. Build them with
+  `src/onvif_rtsp/build.sh` and configure from `src/onvif_rtsp/cam_onvifd.conf.example`.
+- Stop any PC-side RTSP proxy first if you run one — the camera's `:81` is single-client, and
+  the daemon will contend with the proxy for it.
 
 This is the SD-free path; the SD `flashcp` above and the U-Boot `sf` path remain valid.
 
@@ -162,7 +199,8 @@ and RTSP `:554` + ONVIF `:80` all live — **verified after a real cold boot** (
 being baked into the flashed `/system` image and re-staged by the wrapper each boot. The
 per-unit `devpw`/`vuid` are baked into `/system/etc/cam_onvifd.conf` at build time via
 `build_integrated.sh`'s `DEVPW=`/`VUID=` env (public repo ships `CHANGE_ME`). Full wrapper
-source: `builds/features/integrated/build_integrated.sh`.
+source: [`src/build_integrated.sh`](../src/build_integrated.sh) (and the vendor-media-free
+variant [`src/build_clean_image.sh`](../src/build_clean_image.sh)).
 
 ---
 
@@ -184,17 +222,24 @@ its pre-flash behaviour and keeps the WiFi creds intact. (This is why the golden
 
 ## Last resort — full DFU restore (wipes NVS)
 
-Only if the camera won't boot at all. **This erases WiFi creds — you will re-onboard and
-re-read the device password.** Procedure (from the hard-won `FLASHING.md` at the repo root):
+**Only if the camera won't boot at all.** If it boots and you can reach a serial root shell,
+use the `flashcp` path above instead — that is the supported conversion *and* revert route, and
+it needs no DFU. **A full DFU erases WiFi creds — you will re-onboard and re-read the device
+password.**
 
-> **First time / bricked unit?** Getting into BootROM requires opening the camera and shorting
-> two flash pins during power-on — see [HARDWARE_DFU.md](HARDWARE_DFU.md) for the disassembly +
-> pin-short walkthrough. This section covers the PC-side transfer once `a108:c309` enumerates.
+> **Bricked unit?** Getting into BootROM requires opening the camera and shorting two flash
+> pins during power-on — see [HARDWARE_DFU.md](HARDWARE_DFU.md) for the disassembly + pin-short
+> walkthrough. This section covers the PC-side transfer once `a108:c309` enumerates.
 
-**Tools:** `tools/thingino-dfu/…/thingino-dfu.exe` (bootstrap only, `-b`/`-l`),
-`tools/dfu-util/…/dfu-util.exe` (all transfers — `thingino-dfu -w/-r` do **not** work on this
-camera; U-Boot's DFU gadget re-enumerates with the same `a108:c309` VID:PID as the BootROM
-and `thingino-dfu` mis-detects it as still-in-BootROM → `LIBUSB_ERROR_PIPE`).
+**Tools — not shipped in this repo; fetch them from their upstream projects.** You need
+`thingino-dfu.exe` (bootstrap only, `-b`/`-l`) and `dfu-util.exe` (all transfers —
+`thingino-dfu -w/-r` do **not** work on this camera; U-Boot's DFU gadget re-enumerates with the
+same `a108:c309` VID:PID as the BootROM and `thingino-dfu` mis-detects it as still-in-BootROM →
+`LIBUSB_ERROR_PIPE`). [`tools/windows-flasher/README.txt`](../tools/windows-flasher/README.txt)
+gives the exact layout to drop them into (`tools\thingino-dfu\`, `tools\dfu-util.exe`) so the
+shipped [`flash-console.ps1`](../tools/windows-flasher/flash-console.ps1) can drive them. Note
+that kit flashes a **full 8 MiB image, which this repo does not ship** — supply your own
+full-chip backup (see below).
 
 Two hard-won facts:
 - The U-Boot DFU loader **auto-boots after ~60 s** (bootdelay 0, no console window), so the
@@ -237,16 +282,20 @@ SD, then `flashcp`'d. Hard limits learned at the bench:
   port-open session.
 - **Verify bytes by md5, not `cmp`** (`cmp` is absent, so a `cmp || …` fallback always fires a
   false result). Read a byte with `dd … count=1 of=/tmp/b` then `md5sum /tmp/b` against a
-  PC-side md5-of-byte table. Tools: `tools/pwmem3.ps1`, `tools/xfer_flash_v8.ps1`,
-  `tools/reboot_verify_v8.ps1`, `tools/verify_integrated2.ps1`.
+  PC-side md5-of-byte table.
+
+> The author's serial-transfer harnesses (octal streaming, byte verification, reboot checks)
+> live in a private tree and are **not published here**. The constraints above are everything
+> you need to reimplement one; there is no script in this repo to run for this path.
 
 ---
 
 ## The Thingino full-firmware path (Track B) — flashes, but WiFi is blocked
 
-For completeness: a full **Thingino** firmware
-(`tools/thingino-qc3_t23n_gc2083_aic8800u.bin`, sha256 `99ae51bda3…`) flashes and
-**boots** cleanly via the DFU flow above (GC2083, prudynt, uhttpd, ONVIF; login
+For completeness: a full **Thingino** firmware for this board
+(`qc3_t23n_gc2083_aic8800u` — an upstream Thingino build, **not shipped in this repo**;
+get it from the [thingino-firmware](https://github.com/themactep/thingino-firmware) project)
+flashes and **boots** cleanly via the DFU flow above (GC2083, prudynt, uhttpd, ONVIF; login
 root/thingino). **But AIC8800U WiFi never enumerates** — `wlan0` never appears, the
 `aic8800_fdrv`/`aic_load_fw` drivers register but never probe (the USB chip doesn't enumerate
 on dwc2; likely an AIC8800 **variant** driver/firmware mismatch — the board is labelled
