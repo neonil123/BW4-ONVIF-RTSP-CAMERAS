@@ -1,7 +1,7 @@
 /* camweb.so — LD_PRELOAD shim that starts vp_project's dead-code local web/CGI server.
  *
  * QC3 (VeePai BW6, Ingenic T23N) ships with no ESP32, and on this build the
- * bootstrap for vp_project's 127.0.0.1:81 web/CGI server (vp_web_create_socket) was
+ * bootstrap for vp_project's 0.0.0.0:81 web/CGI server (vp_web_create_socket) was
  * compiled out — the function is present but unreachable (see PATCH_DESIGN_1B.md).
  *
  * vp_project is ET_EXEC / non-PIE (fixed load @0x400000, no ASLR on kernel 3.10), so the
@@ -20,8 +20,15 @@
  * This shim must therefore lead the LD_PRELOAD list. [verified hard dependency]
  *
  * Addresses are from static RE of builds/exfil/vp_project.bin (verify before deploy):
- *   vp_web_create_socket : 0x0047db44  (no args; self-guarded; binds 127.0.0.1:81)
+ *   vp_web_create_socket : 0x0047db44  (no args; self-guarded; binds 0.0.0.0:81)
  *   web listen fd (int)   : 0x007e8db8  (-1 until bound)
+ *
+ * NOTE on the bind address: the original static RE assumed 127.0.0.1:81 and earlier
+ * revisions of this header said so. Live `netstat -ltn` on the flashed unit shows
+ * `tcp 0.0.0.0:81 LISTEN` — it binds the wildcard address and is LAN-reachable.
+ * That is not a detail, it is the whole reason this design works: cam_onvifd (and
+ * anything else on the LAN) can pull livestream.cgi without a loopback forwarder.
+ * See docs/FEATURES.md and docs/ARCHITECTURE.md.
  */
 
 #define CREATE_SOCKET_ADDR  0x0047db44u
