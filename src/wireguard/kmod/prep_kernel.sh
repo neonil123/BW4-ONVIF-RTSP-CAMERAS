@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # Configure the thingino 3.10.14 kernel to match the Archon vermagic, then
 # modules_prepare so we can build wireguard-linux-compat against it.
+#
+# Run clone_kernel.sh first. Then:  bash src/wireguard/kmod/prep_kernel.sh
 set -e
-TC="$HOME/x-tools/mipsel-linux-musl-cross/bin"
+TOOLCHAIN="${TOOLCHAIN:-$HOME/x-tools/mipsel-linux-musl-cross}"
+TC="$TOOLCHAIN/bin"
 export PATH="$TC:$PATH"
 export ARCH=mips
 export CROSS_COMPILE=mipsel-linux-musl-
 export LOCALVERSION=-Archon
-K="$HOME/kmod/thingino-linux"; cd "$K"
+SRCDIR="${SRCDIR:-$HOME/kmod}"
+K="$SRCDIR/thingino-linux"
+[ -d "$K" ] || { echo "ERROR: kernel tree missing: $K -- run clone_kernel.sh first" >&2; exit 1; }
+cd "$K"
 
 echo "=== which defconfig targets T23? ==="
 grep -rl -E 'SOC_T23|CONFIG_.*T23' arch/mips/configs/ 2>/dev/null | head

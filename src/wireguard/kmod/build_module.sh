@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 # Fix the gcc11-vs-3.10 header gap, finish modules_prepare, build wireguard.ko.
+#
+# Prerequisites (in order):  clone_kernel.sh  ->  prep_kernel.sh  ->  this script.
+# clone_kernel.sh fetches BOTH sources this needs: thingino-linux and
+# wireguard-linux-compat. Result is copied to <repo>/bin/wireguard.ko.
 set -e
-TC="$HOME/x-tools/mipsel-linux-musl-cross/bin"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # src/wireguard/kmod
+REPO="$(cd "$HERE/../../.." && pwd)"                   # repo root
+TOOLCHAIN="${TOOLCHAIN:-$HOME/x-tools/mipsel-linux-musl-cross}"
+TC="$TOOLCHAIN/bin"
 export PATH="$TC:$PATH"
 export ARCH=mips CROSS_COMPILE=mipsel-linux-musl- LOCALVERSION=-Archon
-K="$HOME/kmod/thingino-linux"; WG="$HOME/kmod/wireguard-linux-compat/src"; cd "$K"
+SRCDIR="${SRCDIR:-$HOME/kmod}"
+K="$SRCDIR/thingino-linux"; WG="$SRCDIR/wireguard-linux-compat/src"
+[ -d "$K" ] || { echo "ERROR: kernel tree missing: $K -- run clone_kernel.sh first" >&2; exit 1; }
+[ -d "$WG" ] || { echo "ERROR: wireguard-linux-compat missing: $WG -- run clone_kernel.sh first" >&2; exit 1; }
+cd "$K"
 
 echo "=== existing compiler-gccN.h ==="; ls include/linux/compiler-gcc*.h
 HI=$(ls include/linux/compiler-gcc*.h | grep -oE 'gcc[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1)
@@ -22,7 +33,10 @@ make -j"$(nproc)" modules_prepare 2>&1 | tail -15
 ls scripts/mod/modpost >/dev/null 2>&1 && echo "MODPOST_OK" || { echo "MODPOST_MISSING - stop"; exit 1; }
 
 echo "=== build wireguard.ko ==="
-make -j"$(nproc)" -C "$K" M="$WG" modules 2>&1 | tail -35
+# wg_compat_fix.h is force-included ONLY for the module objects (not for
+# modules_prepare above, which must build the kernel's own host tools clean).
+make -j"$(nproc)" -C "$K" M="$WG" \
+  KCFLAGS="$KCFLAGS -include $HERE/wg_compat_fix.h" modules 2>&1 | tail -35
 BIN="$WG/wireguard.ko"
 if [ -f "$BIN" ]; then
   echo "=== wireguard.ko built ==="
@@ -30,7 +44,8 @@ if [ -f "$BIN" ]; then
   "$TC/mipsel-linux-musl-strip" --strip-debug "$BIN" -o /tmp/wireguard.ko
   ls -l /tmp/wireguard.ko
   "$TC/mipsel-linux-musl-readelf" -p .modinfo /tmp/wireguard.ko | grep -iE 'vermagic|depends|name'
-  cp /tmp/wireguard.ko $REPO/src/wireguard/kmod/wireguard.ko
+  mkdir -p "$REPO/bin"
+  cp /tmp/wireguard.ko "$REPO/bin/wireguard.ko"
   md5sum /tmp/wireguard.ko
   echo "KO_OK"
 else

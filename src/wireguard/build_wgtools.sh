@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 # Cross-compile the `wg` config tool (wireguard-tools) for mipsel-musl, static.
+#
+# Run from anywhere -- the script locates the repo from its own path:
+#   bash src/wireguard/build_wgtools.sh
+# Toolchain: a mipsel musl cross-GCC (https://musl.cc -> mipsel-linux-musl-cross,
+# or crosstool-NG mipsel-unknown-linux-musl). Override with TOOLCHAIN=/path.
+# Result is copied to <repo>/bin/wg.
 set -e
-CC="$HOME/x-tools/mipsel-linux-musl-cross/bin/mipsel-linux-musl-gcc"
-WORK=/tmp/wgbuild
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # src/wireguard
+REPO="$(cd "$HERE/../.." && pwd)"                      # repo root
+TOOLCHAIN="${TOOLCHAIN:-$HOME/x-tools/mipsel-linux-musl-cross}"
+CC="${CC:-$TOOLCHAIN/bin/mipsel-linux-musl-gcc}"
+# Build under $HOME, not /tmp: WSL wipes tmpfs when the VM idles down.
+WORK="${WORK:-$HOME/wgbuild}"
 mkdir -p "$WORK"; cd "$WORK"
 VER=1.0.20210914
 if [ ! -d wireguard-tools ]; then
@@ -22,8 +32,9 @@ export LDFLAGS="-static"
 make wg CC="$CC"
 echo "=== result ==="
 ls -l wg
-"$HOME/x-tools/mipsel-linux-musl-cross/bin/mipsel-linux-musl-readelf" -h wg | grep -E 'Machine|Type'
+"$TOOLCHAIN/bin/mipsel-linux-musl-readelf" -h wg | grep -E 'Machine|Type'
 file wg 2>/dev/null || true
 md5sum wg
-cp wg $REPO/builds/features/wireguard/wg
+mkdir -p "$REPO/bin"
+cp wg "$REPO/bin/wg"
 echo "WGTOOLS_DONE"

@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 # Cross-compile boringtun-cli for mipsel-unknown-linux-musl (tier-3 -> build-std).
 # Build in $HOME (persistent) NOT /tmp (WSL wipes tmpfs when the VM idles down).
+#
+# Run from anywhere -- the script locates the repo from its own path:
+#   bash src/wireguard/build_boringtun.sh
+# Toolchain: a mipsel musl cross-GCC (https://musl.cc -> mipsel-linux-musl-cross,
+# or crosstool-NG mipsel-unknown-linux-musl). Override with TOOLCHAIN=/path.
+# Result is copied to <repo>/bin/boringtun-cli.
 set -e
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # src/wireguard
+REPO="$(cd "$HERE/../.." && pwd)"                      # repo root
 . "$HOME/.cargo/env"
-TC="$HOME/x-tools/mipsel-linux-musl-cross/bin"
+TOOLCHAIN="${TOOLCHAIN:-$HOME/x-tools/mipsel-linux-musl-cross}"
+TC="$TOOLCHAIN/bin"
 export PATH="$TC:$PATH"
 export CARGO_TARGET_MIPSEL_UNKNOWN_LINUX_MUSL_LINKER="mipsel-linux-musl-gcc"
 export CC_mipsel_unknown_linux_musl="mipsel-linux-musl-gcc"
@@ -21,8 +30,8 @@ export AR_mipsel_unknown_linux_musl="mipsel-linux-musl-ar"
 STUB="$HOME/btbuild/stublib"; mkdir -p "$STUB"
 # Satisfy -lunwind with the toolchain's libgcc_eh.a (provides _Unwind_* symbols),
 # so both immediate-abort (dummy ref) and panic=abort (real refs) link.
-LGE="$(find "$HOME/x-tools/mipsel-linux-musl-cross" -name 'libgcc_eh.a' 2>/dev/null | head -1)"
-if [ -n "$LGE" ]; then cp "$LGE" "$STUB/libunwind.a"; else "$HOME/x-tools/mipsel-linux-musl-cross/bin/mipsel-linux-musl-ar" rcs "$STUB/libunwind.a"; fi
+LGE="$(find "$TOOLCHAIN" -name 'libgcc_eh.a' 2>/dev/null | head -1)"
+if [ -n "$LGE" ]; then cp "$LGE" "$STUB/libunwind.a"; else "$TC/mipsel-linux-musl-ar" rcs "$STUB/libunwind.a"; fi
 # NOTE: panic=abort (diagnostic) prints the panic message before aborting;
 # switch back to `immediate-abort` for the smaller production binary once stable.
 export RUSTFLAGS="-C target-feature=+crt-static -C link-self-contained=no -C link-arg=-static -C link-arg=-no-pie -C panic=abort -C link-arg=-L$STUB"
@@ -46,7 +55,7 @@ fi
 
 # --- PATCH: make the IPv6 listen socket best-effort (this kernel has no IPv6,
 # so the unconditional AF_INET6 socket() fails EAFNOSUPPORT and kills startup) ---
-python3 $REPO/builds/features/wireguard/patch_boringtun.py boringtun/src/device/mod.rs
+python3 "$HERE/patch_boringtun.py" boringtun/src/device/mod.rs
 
 # panic_immediate_abort was renamed; just build-std normally (size is fine).
 BIN=target/mipsel-unknown-linux-musl/release/boringtun-cli
@@ -65,7 +74,8 @@ if [ -f "$BIN" ]; then
   "$TC/mipsel-linux-musl-strip" "$BIN" -o "$WORK/boringtun-cli.stripped"
   ls -l "$WORK/boringtun-cli.stripped"
   md5sum "$WORK/boringtun-cli.stripped"
-  cp "$WORK/boringtun-cli.stripped" $REPO/builds/features/wireguard/boringtun-cli
+  mkdir -p "$REPO/bin"
+  cp "$WORK/boringtun-cli.stripped" "$REPO/bin/boringtun-cli"
   echo "BORINGTUN_OK"
 else
   echo "BORINGTUN_BUILD_FAILED"

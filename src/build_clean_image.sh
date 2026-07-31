@@ -11,21 +11,28 @@
 # back, use build_integrated.sh against your OWN camera's stock /system dump
 # (see docs/STOCK_SYSTEM.md).
 #
-# Run from WSL:
-#   wsl -- bash /mnt/h/projects/Repos/NeoSystems/camhack/builds/features/integrated/build_clean_image.sh
+# Requires: mksquashfs + unsquashfs (squashfs-tools), python3. All inputs come
+# from this repo's own bin/ directory -- no vendor firmware dump is needed.
+#
+# Run from the repo root (or anywhere -- the script locates itself):
+#   bash src/build_clean_image.sh mycam.bin
+# On Windows, run it inside WSL:
+#   wsl -- bash ./src/build_clean_image.sh mycam.bin
 set -e
-ROOT=/mnt/h/projects/Repos/NeoSystems/camhack
-F=$ROOT/builds/features
-DIR=$F/integrated
+# Locate the repo from this script's own path (src/ -> repo root), so the build
+# works from any checkout location.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # .../src
+ROOT="$(cd "$DIR/.." && pwd)"                          # repo root
+BIN="$ROOT/bin"                                        # prebuilt shims/daemon
 MTD4_SZ=$((0x60000))            # 393216
 W=$DIR/_wk_clean
 
-CAMWEB=$ROOT/tools/camweb/camweb_v5.so
-BAT=$F/battery_osd/battery_osd.so
-WIFI=$F/wifi_sd/wifi_sd.so
-PIR=$F/pir_sleep/pir_sleep.so
-ONVIFD=$F/onvif_rtsp/cam_onvifd
-MICCAP=$F/audio/mic_capture/mic_capture.so
+CAMWEB=$BIN/camweb.so
+BAT=$BIN/battery_osd.so
+WIFI=$BIN/wifi_sd.so
+PIR=$BIN/pir_sleep.so
+ONVIFD=$BIN/cam_onvifd
+MICCAP=$BIN/mic_capture.so
 # NOTE: speaker_feed.so (talk-back) is intentionally NOT built into this image.
 # It manipulates the shared jz-inner-codec (IMP_AO SetPubAttr/Enable) and was
 # found to corrupt the 8 kHz microphone into a robotic/metallic signal. The
@@ -40,7 +47,7 @@ DEVPW=${DEVPW:-CHANGE_ME}
 VUID=${VUID:-CHANGE_ME}
 
 for f in "$CAMWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
-  [ -f "$f" ] || { echo "ERROR missing $f"; exit 1; }
+  [ -f "$f" ] || { echo "ERROR missing $f (expected in $BIN -- rebuild it, or restore the prebuilt from the repo)"; exit 1; }
 done
 
 rm -rf "$W"; mkdir -p "$W/sys/bin" "$W/sys/lib" "$W/sys/etc" "$W/sys/www" "$W/sys/version"
@@ -74,7 +81,8 @@ echo "=== neutral text stubs (no vendor media) ==="
 printf 'EN\n'  > "$W/sys/www/language.txt"
 : > "$W/sys/www/upgrade.txt"
 printf 'community_overlay:bw4-onvif-rtsp\n' > "$W/sys/version/version.ini"
-[ "$DEVPW" = "CHANGE_ME" ] && echo "WARN: building with placeholder devpw -- the :81 handshake will fail and there will be NO video. Set DEVPW=/VUID= for a real cam."
+# NOTE: `|| true` -- without it the failed test would abort the script under `set -e`.
+[ "$DEVPW" = "CHANGE_ME" ] && echo "WARN: building with placeholder devpw -- the :81 handshake will fail and there will be NO video. Set DEVPW=/VUID= for a real cam." || true
 
 echo "=== /system/bin/vp_project wrapper (unified LD_PRELOAD chain) ==="
 cat > "$W/sys/bin/vp_project" <<'EOS'
@@ -136,7 +144,7 @@ NEW=$(stat -c%s "$W/sys.squashfs")
 echo "squashfs size=$NEW budget=$MTD4_SZ fits=$([ $NEW -le $MTD4_SZ ] && echo YES || echo NO)"
 [ $NEW -le $MTD4_SZ ] || { echo "ERROR: exceeds mtd4 budget"; exit 1; }
 
-OUT=${1:-$DIR/mtd4_integrated_clean.bin}
+OUT=${1:-$ROOT/mtd4_integrated_clean.bin}
 python3 - "$W/sys.squashfs" "$OUT" $MTD4_SZ <<'PY'
 import sys, hashlib
 src, out, sz = sys.argv[1], sys.argv[2], int(sys.argv[3])

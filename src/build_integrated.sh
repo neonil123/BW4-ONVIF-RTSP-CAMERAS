@@ -1,33 +1,63 @@
 #!/bin/bash
-# build_integrated.sh -- assemble the UNIFIED QC3 deployable: ONE mtd4
+# build_integrated.sh -- assemble the UNIFIED BW4 deployable: ONE mtd4
 # (/system) XZ-squashfs carrying all four LD_PRELOAD shims + a single
 # /system/bin/vp_project wrapper, deployed exactly like the proven camweb v8
 # image (standard mksquashfs -- NO jzlzma; the mtd3 jzlzma reflash path is dead,
 # see memory cam-jzlzma: T23 HW-LZMA rejects the encoder -> boot loop).
 #
-# Run from WSL:
-#   wsl -- bash /mnt/h/projects/Repos/NeoSystems/camhack/builds/features/integrated/build_integrated.sh
+# REQUIRES a dump of YOUR OWN camera's stock /system (mtd4). That vendor blob is
+# deliberately NOT in this repo (see NOTICE.md), so you must supply it:
+#   STOCK_MTD4=/path/to/mtd4_stock_backup.bin bash src/build_integrated.sh
+# Take the dump on the camera itself, BEFORE flashing anything:
+#   cat /dev/mtd4 > /mnt/sda0/mtd4_stock_backup.bin
+# If you don't have (or don't want) the vendor media, use build_clean_image.sh
+# instead -- it builds /system from scratch out of this repo's bin/ alone.
+#
+# Run from the repo root (or anywhere -- the script locates itself):
+#   STOCK_MTD4=... bash src/build_integrated.sh
+# On Windows, run it inside WSL.
 set -e
-ROOT=/mnt/h/projects/Repos/NeoSystems/camhack
-F=$ROOT/builds/features
-DIR=$F/integrated
-STOCK_MTD4=$ROOT/builds/patched/mtd4_system_STOCK.bin
+# Locate the repo from this script's own path (src/ -> repo root).
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # .../src
+ROOT="$(cd "$DIR/.." && pwd)"                          # repo root
+BIN="$ROOT/bin"                                        # prebuilt shims/daemon
+STOCK_MTD4=${STOCK_MTD4:-}                             # REQUIRED, user-supplied
 MTD4_SZ=$((0x60000))            # 393216
 W=$DIR/_wk
 
-CAMWEB=$ROOT/tools/camweb/camweb_v5.so   # unsetenv build (protects busybox/udhcpc children)
-BAT=$F/battery_osd/battery_osd.so
-WIFI=$F/wifi_sd/wifi_sd.so
-PIR=$F/pir_sleep/pir_sleep.so
-ONVIFD=$F/onvif_rtsp/cam_onvifd            # on-device standalone RTSP:554 + ONVIF:80 daemon (now with G.711 audio track)
-MICCAP=$F/audio/mic_capture/mic_capture.so  # persistent pure-read of IMP AI dev1 -> UDP 127.0.0.1:5599 (feeds cam_onvifd audio); zero state change, WiFi-safe
+CAMWEB=$BIN/camweb.so       # unsetenv build (protects busybox/udhcpc children)
+BAT=$BIN/battery_osd.so
+WIFI=$BIN/wifi_sd.so
+PIR=$BIN/pir_sleep.so
+ONVIFD=$BIN/cam_onvifd      # on-device standalone RTSP:554 + ONVIF:80 daemon (now with G.711 audio track)
+MICCAP=$BIN/mic_capture.so  # persistent pure-read of IMP AI dev1 -> UDP 127.0.0.1:5599 (feeds cam_onvifd audio); zero state change, WiFi-safe
 # devpw/vuid are PER-UNIT -- pass real values via env for a real build; the public
 # repo ships CHANGE_ME placeholders (never commit a real device password).
 DEVPW=${DEVPW:-CHANGE_ME}
 VUID=${VUID:-CHANGE_ME}
 
-for f in "$STOCK_MTD4" "$CAMWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
-  [ -f "$f" ] || { echo "ERROR missing $f"; exit 1; }
+if [ -z "$STOCK_MTD4" ]; then
+  cat >&2 <<'MSG'
+ERROR: STOCK_MTD4 is not set.
+
+This build starts from the VENDOR /system image, which is copyrighted and is NOT
+shipped in this repo. Dump it from your OWN camera first:
+
+    cat /dev/mtd4 > /mnt/sda0/mtd4_stock_backup.bin
+
+then re-run:
+
+    STOCK_MTD4=/path/to/mtd4_stock_backup.bin bash src/build_integrated.sh
+
+Or use src/build_clean_image.sh, which needs no vendor dump (it builds /system
+from scratch and loses only the vendor voice prompts).
+MSG
+  exit 1
+fi
+[ -f "$STOCK_MTD4" ] || { echo "ERROR: STOCK_MTD4=$STOCK_MTD4 does not exist" >&2; exit 1; }
+
+for f in "$CAMWEB" "$BAT" "$WIFI" "$PIR" "$ONVIFD" "$MICCAP"; do
+  [ -f "$f" ] || { echo "ERROR missing $f (expected in $BIN)"; exit 1; }
 done
 
 rm -rf "$W"; mkdir -p "$W"
@@ -60,12 +90,13 @@ rtsp_name=live
 onvif_port=80
 log_level=2
 EOF
-[ "$DEVPW" = "CHANGE_ME" ] && echo "WARN: building with placeholder devpw (set DEVPW=... for a real cam)"
+# NOTE: `|| true` -- without it the failed test would abort the script under `set -e`.
+[ "$DEVPW" = "CHANGE_ME" ] && echo "WARN: building with placeholder devpw (set DEVPW=... for a real cam)" || true
 
 echo "=== write single /system/bin/vp_project wrapper (unified LD_PRELOAD chain) ==="
 cat > "$W/sys/bin/vp_project" <<'EOS'
 #!/bin/sh
-# UNIFIED QC3 shim wrapper. /system/bin is first on PATH so this shadows
+# UNIFIED BW4 shim wrapper. /system/bin is first on PATH so this shadows
 # /usr/bin/vp_project; the real binary is exec'd by absolute path (no recursion).
 #
 # 1) NOP the create_web onboarding gate in the RAM copy so camweb can bind :81
@@ -115,7 +146,7 @@ NEW=$(stat -c%s "$W/sys.squashfs")
 echo "squashfs size=$NEW  budget=$MTD4_SZ  fits=$([ $NEW -le $MTD4_SZ ] && echo YES || echo NO)"
 [ $NEW -le $MTD4_SZ ] || { echo "ERROR: exceeds mtd4 budget -- trim /system/www voice prompts like v8"; exit 1; }
 
-OUT=$DIR/mtd4_integrated.bin
+OUT=${1:-$ROOT/mtd4_integrated.bin}
 python3 - "$W/sys.squashfs" "$OUT" $MTD4_SZ <<'PY'
 import sys, hashlib
 src, out, sz = sys.argv[1], sys.argv[2], int(sys.argv[3])
