@@ -18,8 +18,9 @@ The on-device daemon serves ONVIF on `:80` and RTSP on `:554`, so the DVR talks 
 2. **User-Defined / custom RTSP**: `rtsp://<cam-ip>:554/live`.
 
 Full setup walkthrough (both methods, Synology + generic NVRs) is in [ONVIF.md](ONVIF.md) §4.
-On the pilot the camera has been at `192.168.100.106`; find yours in the router DHCP lease
-table or via serial `ifconfig vnet0`.
+`<cam-ip>` is whatever address your DHCP server hands the camera; find it in the router's
+DHCP lease table (look for the camera's MAC / hostname) or via serial `ifconfig vnet0`. A
+DHCP reservation is worth setting so the NVR entry doesn't break on lease renewal.
 
 The device's ONVIF credential (default `admin`/`admin`) is **separate** from the camera's
 internal device password (`<your-unit-devpw>` on the pilot, per-unit random) — the daemon
@@ -55,8 +56,8 @@ as the primary path.
 
 ## Why the stock camera couldn't be discovered at all
 
-`vp_project` contains **no** RTSP or ONVIF protocol strings — probed directly with
-`tools/app_onvif.py` against `builds/exfil/vp_project.bin` (checks `RTSP/1.0`, `DESCRIBE`,
+`vp_project` contains **no** RTSP or ONVIF protocol strings — probed directly with a string
+scan over a dump of the stock `/usr/bin/vp_project` (checks `RTSP/1.0`, `DESCRIBE`,
 `rtsp://`, `a=rtpmap`, `GetProfiles`, `onvif.org`, `NetworkVideoTransmitter`, `ws-discovery`,
 `wsdd`, …). The stock app speaks only the private VStarcam `0xA815AA55` frame protocol over
 its `:81` CGI and, for the cloud, a P2P protocol on `:19548`/`:20xxx`. ONVIF is therefore a

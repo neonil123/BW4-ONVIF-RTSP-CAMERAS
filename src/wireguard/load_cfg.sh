@@ -1,10 +1,13 @@
 #!/bin/sh
 # load_cfg.sh -- extract the baked WiFi + WireGuard config from FLASH into RAM.
-# The config blob lives in our mtd4 partition at 0x40000 (block 8, the free space
-# after the /system squashfs -- the vendor never touches mtd4). Keys therefore
-# never sit on the SD. Written to /tmp so the shims (aic_wifi, wg_up) read them.
+# The config blob lives in our mtd4 partition at 0x58000 -- the last 32 KB of the
+# 0x60000 partition, i.e. free space after the /system squashfs (the vendor never
+# touches mtd4). Keys therefore never sit on the SD. Written to /tmp so the shims
+# (aic_wifi, wg_up) read them.
 #
-# Blob format (plain text, terminated by ###END###, rest of the block is 0xFF):
+# Blob format (plain text, terminated by ###END###; the builders zero-pad mtd4 out
+# to 0x60000, so on a freshly built image the rest of the region reads 0x00 --
+# either way parsing stops at ###END###):
 #   ###BW4CFG1###
 #   ###WGDEFAULT=on###        (or off)
 #   ###WIFI###
@@ -18,7 +21,7 @@ BLOB=/tmp/cfgblob
 : > /tmp/wireguard.conf
 echo on > /tmp/wg_default
 
-# read the config block at 0x58000 (last mtd4 block; 0x58000 = 4096*88), 8 KB
+# read the config block at 0x58000 (= 4096*88, the last 32 KB of mtd4), 8 KB
 dd if=/dev/mtd4 bs=4096 skip=88 count=2 2>/dev/null > "$BLOB" || exit 0
 [ -s "$BLOB" ] || exit 0
 

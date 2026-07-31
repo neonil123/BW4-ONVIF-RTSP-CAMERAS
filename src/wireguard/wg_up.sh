@@ -4,9 +4,12 @@
 # .conf (or .ini): the [Interface]/[Peer] section headers are ignored; keys are
 # read by name. The camera dials OUT to the server, so it traverses any NAT.
 #
-#   [Interface]  PrivateKey, Address (e.g. 10.190.190.8/32), [MTU]
-#   [Peer]       PublicKey, [PresharedKey], Endpoint (host:port),
-#                AllowedIPs (e.g. 10.190.190.0/24), [PersistentKeepalive]
+#   [Interface]  PrivateKey, Address (e.g. 10.9.0.2/32), [MTU]
+#   [Peer]       PublicKey, [PresharedKey], Endpoint (host:port, e.g.
+#                203.0.113.4:51820), AllowedIPs (e.g. 10.9.0.0/24),
+#                [PersistentKeepalive]
+# See docs/WIREGUARD.md for a full example config -- all addresses here are
+# placeholders; substitute your own tunnel subnet and server endpoint.
 set -e
 # Default config is the RAM copy the boot wrapper extracts from flash (keys never
 # sit on the SD). An explicit path arg still overrides (e.g. for testing).

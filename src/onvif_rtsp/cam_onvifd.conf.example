@@ -5,8 +5,8 @@
 # CAM_VUID, or --devpw/--vuid on the command line (highest priority).
 
 # --- required for the camera-side handshake (livestream.cgi) ---
-# Device admin password (the random per-unit value in NVS -- read once from
-# a live vp_project via /proc/<pid>/mem, see cam-rtsp-proxy project memory).
+# Device admin password (the random per-unit value stored in NVS -- read once
+# from a live vp_project via /proc/<pid>/mem; see docs/ONVIF.md).
 devpw=CHANGE_ME
 # Device id (vuid) -- the per-unit ID string, e.g. VQxxxxxxxXXXX.
 vuid=CHANGE_ME
@@ -24,8 +24,12 @@ rtsp_name=live
 
 # --- ONVIF (WS-Discovery + SOAP) ---
 onvif_port=80
-# device_ip=192.168.100.106   # uncomment to force an address instead of
-                              # auto-detecting per-client via getsockname()
+# device_ip -- the IPv4 address the daemon advertises to NVRs in ONVIF/RTSP
+# URLs (WS-Discovery XAddrs, GetStreamUri, ...). Leave it commented out and the
+# daemon auto-detects the right address per client via getsockname(), which is
+# what you want on a normal single-subnet LAN. Set it only to FORCE one address
+# (e.g. a multi-homed camera, or when the NVR must be handed a specific IP).
+# device_ip=<cam-ip>
 
 # ONVIF credentials -- what the OPERATOR TYPES INTO THE NVR (Synology
 # Surveillance Station, Frigate, Blue Iris, ...), completely separate from
@@ -48,7 +52,7 @@ hardware_id=T23N
 
 # video_width/video_height are only a FALLBACK for the brief window before
 # the first SPS is observed -- ONVIF then advertises the real live stream
-# resolution (parsed from the actual SPS, e.g. 2304x1296 on cam #1).
+# resolution (parsed from the actual SPS, e.g. 2304x1296 on the BW4-T23N).
 video_width=1920
 video_height=1080
 
