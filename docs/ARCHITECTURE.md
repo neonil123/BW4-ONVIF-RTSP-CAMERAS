@@ -229,6 +229,63 @@ dd if=/proc/$(pidof vp_project)/mem bs=1 skip=8513928 count=20   # 8513928 = 0x8
 
 On the pilot this read `<your-unit-devpw>`. **Re-read it if the camera is ever re-onboarded.**
 
+#### Device id (`vuid`) [verified]
+
+The `livestream.cgi` handshake needs a **second** per-unit value, `vuid` — a **13-character**
+string of the form **`VQ` + 11 alphanumerics** (e.g. `VQ0000000AAAA`). It is the vendor's
+cloud/P2P device identity, and unlike the device password it is **factory-programmed**: it
+survives onboarding, factory reset and re-onboarding. It is stored in `mtd5` NVS under the
+key **`VP_DEV_ID`** (its sibling `VP_DEV_KEY` is the P2P secret — *not* needed by anything
+here, and it should never leave the unit).
+
+There are two ways to read it. Both were verified against the same unit and agree.
+
+**(a) Live, from `vp_project` memory** — same mechanism as the device password above.
+`vp_project` reads `VP_DEV_ID` out of NVS at startup and `strncpy`s it (`0x7d4340`, 0x80
+bytes) into the **`.data` global `0x7F1F81`**; the accessor `get_dev_id()` at **`0x6aca88`**
+is a two-instruction `return 0x7F1F81` used by 66 call sites — including `0x42a230`, the
+`result=-1;vuid=%s;realdeviceid=%s;…` failure-response builder, which is what proves this
+global *is* the `vuid` the CGI layer means. (`VP_DEV_KEY` lands in the adjacent global
+`0x7F2001`, accessor `0x6aca94`; the writer for both is `0x6acaa0`.)
+
+```sh
+dd if=/proc/$(pidof vp_project)/mem bs=1 skip=8331137 count=16   # 8331137 = 0x7F1F81
+```
+
+Expect 13 printable characters (`VQ…`) followed by NUL padding. Ignore the padding.
+
+**(b) Directly from the NVS partition.** `mtd5` stores NVS as `key\0value\0` pairs; on the
+pilot the `VP_DEV_ID` key sits at offset `0x5376` and its value therefore at `0x5380`:
+
+```sh
+dd if=/dev/mtd5 bs=1 skip=21376 count=13 2>/dev/null; echo   # 21376 = 0x5380
+```
+
+`mtd5` is **double-buffered** — two 0x20000 banks — so the same record appears again 0x20000
+bytes later at `0x25380` (`skip=152448`), which is a useful sanity check.
+
+> **Caveat on the fixed offset.** `0x5380` is verified on the author's unit only. NVS records
+> are laid out by key order, so the offset is expected to be identical across units of the
+> same firmware, but it is **not** guaranteed the way the `0x7F1F81` global is. If
+> `skip=21376` does not yield a `VQ…` string, do **not** guess — fall back to method (a), or
+> copy the partition off and locate the key by name on a PC:
+>
+> ```sh
+> cat /dev/mtd5 > /mnt/sda0/mtd5.bin      # on the camera
+> ```
+> ```sh
+> grep -abo VP_DEV_ID mtd5.bin            # on the PC -- value starts 10 bytes after the hit
+> ```
+>
+> (`VP_DEV_ID` is 9 characters plus its NUL terminator, hence +10.)
+
+If both methods fail — e.g. the unit was USB-DFU'd with a sanitized `mtd5` that had the
+per-unit identity stripped — the `vuid` is also printed on the **label/QR code under the RF
+shield** and shown in the vendor app's device-info screen. There is no way to *derive* it.
+
+**Treat both values as per-unit secrets:** never commit a real `devpw`/`vuid`, an image built
+with them, or a raw `mtd5`/full-chip dump (see [NOTICE.md](../NOTICE.md)).
+
 ### 4c. The VStarcam frame protocol [verified — reconstructed from `vp_project`]
 
 `tools/vstarcam_frame.py` implements the 32-byte frame header the app's session reader
@@ -261,7 +318,7 @@ standard `rtsp://<pc>:8554/live` (SDP `H264/90000`, `profile-level-id=640032`, s
 the live SPS/PPS; RFC-6184 FU-A fragmentation for the large IDRs):
 
 ```
-python tools/cam_rtsp_proxy.py --connect 192.168.100.106:81 \
+python tools/cam_rtsp_proxy.py --connect <cam-ip>:81 \
     --user admin --pwd <devpw> --vuid <VUID> \
     --streamid 10 --substream 2 --port 8554 --name live --fps 15
 ```

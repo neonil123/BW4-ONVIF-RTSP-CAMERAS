@@ -88,11 +88,17 @@ Everything is packed into one XZ-squashfs `mtd4` overlay. Deep dive: [ARCHITECTU
 
 You need: the camera already onboarded to Wi-Fi, a serial console (COM, 115200 8N1, DTR/RTS
 de-asserted), WSL/Linux with `mksquashfs`/`xz` for building, and — for a working stream — your
-**unit's device password**.
+**unit's device password and device id (`vuid`)** — two separate per-unit values, each read a
+different way (both procedures are in
+[ARCHITECTURE.md](docs/ARCHITECTURE.md#4b-device-password-verified)).
 
 ```sh
-# 1. Read your unit's device password + vuid (per-unit random, from NVS).
-#    Method: docs/ARCHITECTURE.md  ->  "Device password".
+# 1. Read your unit's TWO per-unit values from a root shell on the camera.
+#    devpw -- per-unit random, set at onboarding.  docs/ARCHITECTURE.md -> "Device password"
+dd if=/proc/$(pidof vp_project)/mem bs=1 skip=8513928 count=20   # 8513928 = 0x81E988
+#    vuid  -- factory-programmed "VQ"+11 alnum.    docs/ARCHITECTURE.md -> "Device id (vuid)"
+dd if=/proc/$(pidof vp_project)/mem bs=1 skip=8331137 count=16   # 8331137 = 0x7F1F81
+#    (vuid can also be read straight from NVS: dd if=/dev/mtd5 bs=1 skip=21376 count=13)
 
 # 2. Build an image carrying YOUR creds (needs the toolchain-built binaries in bin/;
 #    to rebuild those from source see src/onvif_rtsp/build.sh and the shim notes).
