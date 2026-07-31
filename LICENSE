@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This license covers the original code in this repository only. It does not
-grant rights to any third-party or vendor software (Ingenic IMP SDK, the
-VeePai application, kernel, or bootloader), none of which is included here.
-The MIT-licensed code interoperates with that software via documented runtime
-addresses and ABIs. See NOTICE.md.
